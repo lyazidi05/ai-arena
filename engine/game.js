@@ -229,6 +229,29 @@ function calcTrainingGain(stat, fighter) {
   return Math.round(base * diminish * 10) / 10;
 }
 
+const MARKETPLACE = {
+  power_boost:     { id: 'power_boost',     category: 'boost',    name: 'Power Boost',     price: 30,  effect: { stat: 'power',    amount: 10, duration_fights: 3 } },
+  speed_boost:     { id: 'speed_boost',     category: 'boost',    name: 'Speed Boost',     price: 30,  effect: { stat: 'speed',    amount: 10, duration_fights: 3 } },
+  agility_boost:   { id: 'agility_boost',   category: 'boost',    name: 'Agility Boost',   price: 30,  effect: { stat: 'agility',  amount: 10, duration_fights: 3 } },
+  striking_boost:  { id: 'striking_boost',  category: 'boost',    name: 'Striking Boost',  price: 35,  effect: { stat: 'striking', amount: 10, duration_fights: 3 } },
+  grappling_boost: { id: 'grappling_boost', category: 'boost',    name: 'Grappling Boost', price: 35,  effect: { stat: 'grappling',amount: 10, duration_fights: 3 } },
+  endurance_boost: { id: 'endurance_boost', category: 'boost',    name: 'Endurance Boost', price: 25,  effect: { stat: 'endurance',amount: 10, duration_fights: 3 } },
+  iron_chin:       { id: 'iron_chin',       category: 'boost',    name: 'Iron Chin',       price: 50,  effect: { head_dmg_reduction: 0.20, duration_fights: 2 } },
+  cardio_king:     { id: 'cardio_king',     category: 'boost',    name: 'Cardio King',     price: 40,  effect: { stamina_cost_reduction: 0.30, duration_fights: 2 } },
+  energy_drink:    { id: 'energy_drink',    category: 'recovery', name: 'Energy Drink',    price: 15,  effect: { fatigue_reduction: 20 } },
+  full_recovery:   { id: 'full_recovery',   category: 'recovery', name: 'Full Recovery',   price: 40,  effect: { fatigue_reduction: 100 } },
+  massage:         { id: 'massage',         category: 'recovery', name: 'Massage',         price: 25,  effect: { fatigue_reduction: 30, reset_training_cooldown: true } },
+  boxing_coach:    { id: 'boxing_coach',    category: 'coaching', name: 'Boxing Coach',    price: 50,  effect: { train_stat: 'striking', bonus_points: 5 } },
+  wrestling_coach: { id: 'wrestling_coach', category: 'coaching', name: 'Wrestling Coach', price: 50,  effect: { train_stat: 'grappling', bonus_points: 5 } },
+  cardio_coach:    { id: 'cardio_coach',    category: 'coaching', name: 'Cardio Coach',    price: 40,  effect: { train_stat: 'endurance', bonus_points: 5 } },
+  speed_coach:     { id: 'speed_coach',     category: 'coaching', name: 'Speed Coach',     price: 45,  effect: { train_stat: 'speed', bonus_points: 4 } },
+  defense_coach:   { id: 'defense_coach',   category: 'coaching', name: 'Defense Coach',   price: 60,  effect: { block_dodge_bonus: 0.15, duration_fights: 5 } },
+  gold_shorts:     { id: 'gold_shorts',     category: 'cosmetic', name: 'Gold Shorts',     price: 100, effect: { visual: 'gold_shorts' } },
+  red_gloves:      { id: 'red_gloves',      category: 'cosmetic', name: 'Red Gloves',      price: 50,  effect: { visual: 'red_gloves' } },
+  champion_aura:   { id: 'champion_aura',   category: 'cosmetic', name: 'Champion Aura',   price: 200, effect: { visual: 'champion_aura' } },
+  custom_nickname: { id: 'custom_nickname', category: 'cosmetic', name: 'Change Nickname', price: 25,  effect: { visual: 'nickname' } },
+};
+
 module.exports = {
   WEIGHT_CLASSES,
   DISCIPLINES,
@@ -250,4 +273,5 @@ module.exports = {
   FATIGUE_PER_TRAIN,
   FATIGUE_MAX_FIGHT,
   FATIGUE_DECAY_PER_HOUR,
+  MARKETPLACE,
 };

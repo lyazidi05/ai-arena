@@ -7,6 +7,7 @@ const {
   checkCombo, applyFatigue, currentFatigue,
   WEIGHT_CLASSES, DISCIPLINES, MOVES, COMBOS, TRAINING_COOLDOWN_MS,
   FATIGUE_PER_FIGHT, FATIGUE_PER_TRAIN, FATIGUE_MAX_FIGHT,
+  MARKETPLACE,
 } = require('../engine/game');
 
 // Middleware auth
@@ -17,6 +18,48 @@ function auth(req, res, next) {
   if (!fighter) return res.status(401).json({ error: 'Invalid API key' });
   req.fighter = fighter;
   next();
+}
+
+// Helper: determine real-time fighter status
+function getFighterStatus(fighter) {
+  const now = new Date();
+
+  const activeFight = db.prepare(
+    "SELECT id FROM fights WHERE (fighter1_id = ? OR fighter2_id = ?) AND status = 'active'"
+  ).get(fighter.id, fighter.id);
+  if (activeFight) return { status: 'fighting', detail: 'En combat', fight_id: activeFight.id, color: 'red' };
+
+  const openChallenge = db.prepare(
+    "SELECT id FROM challenges WHERE challenger_id = ? AND status = 'open'"
+  ).get(fighter.id);
+  if (openChallenge) return { status: 'looking', detail: 'Cherche un combat', color: 'yellow' };
+
+  if (fighter.last_trained_at) {
+    const lastTrain = new Date(fighter.last_trained_at * 1000);
+    const minutesAgo = (now - lastTrain) / (1000 * 60);
+    if (minutesAgo < 5) {
+      const lastTraining = db.prepare(
+        'SELECT stat FROM training_log WHERE fighter_id = ? ORDER BY id DESC LIMIT 1'
+      ).get(fighter.id);
+      const stat = lastTraining ? lastTraining.stat : 'stats';
+      return { status: 'training', detail: 'Entraine ' + stat, color: 'blue' };
+    }
+  }
+
+  const lastActive = fighter.last_fight_at ? new Date(fighter.last_fight_at * 1000) : new Date(0);
+  const hoursAgo = (now - lastActive) / (1000 * 60 * 60);
+  if (hoursAgo > 2) return { status: 'offline', detail: 'Inactif ' + Math.floor(hoursAgo) + 'h', color: 'gray' };
+
+  return { status: 'idle', detail: 'Repos', color: 'green' };
+}
+
+// Helper: award Arena Coins to a fighter wallet
+function awardCoins(fighterId, amount, description) {
+  const wallet = db.prepare('SELECT balance FROM fighter_wallets WHERE fighter_id = ?').get(fighterId);
+  if (!wallet) return;
+  const newBalance = wallet.balance + amount;
+  db.prepare('UPDATE fighter_wallets SET balance = ?, total_earned = total_earned + ? WHERE fighter_id = ?').run(newBalance, amount, fighterId);
+  db.prepare('INSERT INTO transactions (fighter_id, type, amount, description, balance_after) VALUES (?, ?, ?, ?, ?)').run(fighterId, 'fight_reward', amount, description, newBalance);
 }
 
 // POST /register
@@ -42,15 +85,19 @@ router.post('/register', (req, res) => {
   const weight_class = getWeightClass(weight_kg);
   const stats = calcBaseStats(height_cm, weight_kg, discipline);
 
-  db.prepare(`
+  const insertFighter = db.prepare(`
     INSERT INTO fighters (api_key, name, height_cm, weight_kg, discipline, weight_class,
       power, speed, agility, striking, grappling, endurance, reach)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(api_key, name, height_cm, weight_kg, discipline, weight_class,
+  `);
+  const result = insertFighter.run(api_key, name, height_cm, weight_kg, discipline, weight_class,
     stats.power, stats.speed, stats.agility, stats.striking, stats.grappling, stats.endurance, stats.reach);
+  const newId = result.lastInsertRowid;
+  db.prepare('INSERT INTO fighter_wallets (fighter_id, balance) VALUES (?, 100)').run(newId);
+  db.prepare('INSERT INTO transactions (fighter_id, type, amount, description, balance_after) VALUES (?, ?, ?, ?, ?)').run(newId, 'welcome_bonus', 100, 'Bonus de bienvenue', 100);
 
   res.json({
-    message: `Welcome to the arena, ${name}!`,
+    message: `Welcome to Clash of Agents, ${name}!`,
     api_key,
     fighter: {
       name, height_cm, weight_kg, discipline, weight_class,
@@ -122,10 +169,21 @@ router.post('/train', auth, (req, res) => {
 // GET /leaderboard
 router.get('/leaderboard', (req, res) => {
   const fighters = db.prepare(`
-    SELECT name, discipline, weight_class, elo, wins, losses, draws, ko_wins, submission_wins
-    FROM fighters ORDER BY elo DESC LIMIT 50
+    SELECT * FROM fighters ORDER BY elo DESC LIMIT 50
   `).all();
-  res.json({ leaderboard: fighters });
+  const leaderboard = fighters.map(f => ({
+    name: f.name,
+    discipline: f.discipline,
+    weight_class: f.weight_class,
+    elo: f.elo,
+    wins: f.wins,
+    losses: f.losses,
+    draws: f.draws,
+    ko_wins: f.ko_wins,
+    submission_wins: f.submission_wins,
+    status: getFighterStatus(f),
+  }));
+  res.json({ leaderboard });
 });
 
 // GET /leaderboard/champions
@@ -199,6 +257,12 @@ router.post('/challenge/:id/accept', auth, (req, res) => {
     fighter1: f1.name,
     fighter2: f2.name,
   });
+});
+
+// GET /fighters/statuses — real-time status of all fighters (must be before /:name)
+router.get('/fighters/statuses', (req, res) => {
+  const fighters = db.prepare('SELECT * FROM fighters ORDER BY elo DESC').all();
+  res.json({ statuses: fighters.map(f => ({ id: f.id, name: f.name, ...getFighterStatus(f) })) });
 });
 
 // GET /fighters/:name — public profile
@@ -394,6 +458,31 @@ router.get('/fighters/:name/activity', (req, res) => {
     cooldown_remaining_ms: Math.round(remainingMs),
     last_trained_at: lastTrainedAt > 0 ? new Date(lastTrainedAt * 1000).toISOString() : null,
     training_log: trainLog,
+  });
+});
+
+// GET /fighters/:id/activity — detailed activity (by numeric id)
+router.get('/fighters/:id/activity', (req, res) => {
+  const f = db.prepare('SELECT * FROM fighters WHERE id = ?').get(req.params.id);
+  if (!f) return res.status(404).json({ error: 'Fighter not found' });
+
+  const recentTraining = db.prepare(
+    'SELECT stat as stat_trained, gain as points_gained, created_at FROM training_log WHERE fighter_id = ? ORDER BY id DESC LIMIT 5'
+  ).all(req.params.id);
+
+  const nowMs = Date.now();
+  const lastTrainMs = f.last_trained_at ? f.last_trained_at * 1000 : 0;
+  const canTrainNow = !f.last_trained_at || (nowMs - lastTrainMs) >= TRAINING_COOLDOWN_MS;
+  const minutesUntilTrain = !canTrainNow ? Math.max(0, Math.ceil((TRAINING_COOLDOWN_MS - (nowMs - lastTrainMs)) / 60000)) : 0;
+
+  res.json({
+    status: getFighterStatus(f),
+    fatigue: currentFatigue(f),
+    training: {
+      can_train: canTrainNow,
+      minutes_until_next: minutesUntilTrain,
+      recent_sessions: recentTraining,
+    }
   });
 });
 
@@ -619,6 +708,15 @@ router.post('/fight/:id/action', auth, (req, res) => {
       fighter1_hp = ?, fighter2_hp = ?, fighter1_stamina = ?, fighter2_stamina = ?,
       ${movesCol} = ? WHERE id = ?`)
       .run(winnerId, endMethod, newF1Hp, newF2Hp, newF1Stamina, newF2Stamina, newMovesStr, fight.id);
+
+    // ── Award Arena Coins to winner ──
+    {
+      let coinReward = 50;
+      let coinDesc = 'Victoire';
+      if (endMethod === 'ko' || endMethod === 'tko') { coinReward += 20; coinDesc = 'Victoire par KO/TKO'; }
+      else if (endMethod === 'submission') { coinReward += 15; coinDesc = 'Victoire par soumission'; }
+      awardCoins(winnerId, coinReward, coinDesc);
+    }
 
     // ── Settle bets ──
     {
@@ -1050,6 +1148,109 @@ router.get('/wallet/:name', (req, res) => {
 router.get('/leaderboard/bettors', (req, res) => {
   const top = db.prepare('SELECT owner_name, balance, total_won, total_lost FROM wallets ORDER BY balance DESC LIMIT 20').all();
   res.json({ bettors: top });
+});
+
+// ─────────────────────────────────────────
+// MARKETPLACE SYSTEM
+// ─────────────────────────────────────────
+
+// GET /marketplace — catalogue complet
+router.get('/marketplace', (req, res) => {
+  const categories = {};
+  for (const item of Object.values(MARKETPLACE)) {
+    if (!categories[item.category]) categories[item.category] = [];
+    categories[item.category].push(item);
+  }
+  res.json({ items: Object.values(MARKETPLACE), by_category: categories });
+});
+
+// GET /wallet — solde + 10 dernières transactions (authentifié)
+router.get('/wallet', auth, (req, res) => {
+  let wallet = db.prepare('SELECT * FROM fighter_wallets WHERE fighter_id = ?').get(req.fighter.id);
+  if (!wallet) {
+    db.prepare('INSERT INTO fighter_wallets (fighter_id, balance) VALUES (?, 100)').run(req.fighter.id);
+    wallet = { fighter_id: req.fighter.id, balance: 100, total_earned: 0, total_spent: 0 };
+  }
+  const txs = db.prepare('SELECT * FROM transactions WHERE fighter_id = ? ORDER BY id DESC LIMIT 10').all(req.fighter.id);
+  res.json({ ...wallet, recent_transactions: txs });
+});
+
+// POST /marketplace/buy — acheter un item
+router.post('/marketplace/buy', auth, (req, res) => {
+  const { item_id } = req.body;
+  const item = MARKETPLACE[item_id];
+  if (!item) return res.status(400).json({ error: 'Item introuvable dans le catalogue' });
+
+  let wallet = db.prepare('SELECT * FROM fighter_wallets WHERE fighter_id = ?').get(req.fighter.id);
+  if (!wallet) {
+    db.prepare('INSERT INTO fighter_wallets (fighter_id, balance) VALUES (?, 100)').run(req.fighter.id);
+    wallet = { fighter_id: req.fighter.id, balance: 100, total_earned: 0, total_spent: 0 };
+  }
+  if (wallet.balance < item.price) {
+    return res.status(400).json({ error: `Fonds insuffisants. Solde: ${wallet.balance} AC, Prix: ${item.price} AC` });
+  }
+
+  const newBalance = wallet.balance - item.price;
+  db.prepare('UPDATE fighter_wallets SET balance = ?, total_spent = total_spent + ? WHERE fighter_id = ?').run(newBalance, item.price, req.fighter.id);
+  db.prepare('INSERT INTO transactions (fighter_id, type, amount, description, balance_after) VALUES (?, ?, ?, ?, ?)').run(req.fighter.id, 'purchase', -item.price, 'Achat: ' + item.name, newBalance);
+
+  const fighter = db.prepare('SELECT * FROM fighters WHERE id = ?').get(req.fighter.id);
+
+  if (item.category === 'recovery') {
+    const reduction = item.effect.fatigue_reduction || 0;
+    const fatigue = currentFatigue(fighter);
+    const newFatigue = Math.max(0, fatigue - reduction);
+    const updateFields = ['fatigue = ?'];
+    const updateValues = [newFatigue];
+    if (item.effect.reset_training_cooldown) {
+      updateFields.push('last_trained_at = 0');
+    }
+    updateValues.push(req.fighter.id);
+    db.prepare(`UPDATE fighters SET ${updateFields.join(', ')} WHERE id = ?`).run(...updateValues);
+
+  } else if (item.category === 'coaching') {
+    const stat = item.effect.train_stat;
+    const bonus = item.effect.bonus_points || 0;
+    const current = fighter[stat] || 50;
+    const capped = Math.min(99, current + bonus);
+    db.prepare(`UPDATE fighters SET ${stat} = ? WHERE id = ?`).run(capped, req.fighter.id);
+
+  } else if (item.category === 'boost') {
+    const uses = item.effect.duration_fights || 1;
+    db.prepare('INSERT INTO inventory (fighter_id, item_id, item_name, category, remaining_uses, effect_value) VALUES (?, ?, ?, ?, ?, ?)').run(req.fighter.id, item.id, item.name, item.category, uses, JSON.stringify(item.effect));
+
+  } else if (item.category === 'cosmetic') {
+    db.prepare('INSERT INTO inventory (fighter_id, item_id, item_name, category, remaining_uses, effect_value) VALUES (?, ?, ?, ?, ?, ?)').run(req.fighter.id, item.id, item.name, item.category, -1, JSON.stringify(item.effect));
+  }
+
+  res.json({ success: true, item: item.name, new_balance: newBalance });
+});
+
+// GET /inventory — inventaire du fighter
+router.get('/inventory', auth, (req, res) => {
+  const items = db.prepare("SELECT * FROM inventory WHERE fighter_id = ? AND is_active = 1 ORDER BY purchased_at DESC").all(req.fighter.id);
+  res.json({ inventory: items });
+});
+
+// POST /inventory/activate — activer un boost avant un combat
+router.post('/inventory/activate', auth, (req, res) => {
+  const { inventory_id } = req.body;
+  if (!inventory_id) return res.status(400).json({ error: 'inventory_id required' });
+  const item = db.prepare('SELECT * FROM inventory WHERE id = ? AND fighter_id = ? AND is_active = 1').get(inventory_id, req.fighter.id);
+  if (!item) return res.status(404).json({ error: 'Item non trouvé dans votre inventaire' });
+  res.json({ activated: true, item: item.item_name });
+});
+
+// GET /marketplace/feed — 20 dernières transactions de tous les agents
+router.get('/marketplace/feed', (req, res) => {
+  const feed = db.prepare(`
+    SELECT t.*, f.name as fighter_name
+    FROM transactions t
+    JOIN fighters f ON t.fighter_id = f.id
+    WHERE t.type = 'purchase'
+    ORDER BY t.id DESC LIMIT 20
+  `).all();
+  res.json({ feed });
 });
 
 // GET /docs

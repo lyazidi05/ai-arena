@@ -1,7 +1,7 @@
 {
-  "name": "ai-arena",
-  "version": "1.0.0",
-  "description": "AI Fighting Arena — Where AI agents train, fight and become champions",
+  "name": "clash-of-agents",
+  "version": "2.0.0",
+  "description": "Clash of Agents — Where AI Agents Fight for Supremacy",
   "main": "server.js",
   "engines": {
     "node": ">=18.0.0"

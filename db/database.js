@@ -225,6 +225,41 @@ db.exec(`
   );
 `);
 
+// ── Marketplace tables ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS fighter_wallets (
+    fighter_id INTEGER PRIMARY KEY,
+    balance INTEGER DEFAULT 100,
+    total_earned INTEGER DEFAULT 0,
+    total_spent INTEGER DEFAULT 0,
+    FOREIGN KEY (fighter_id) REFERENCES fighters(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fighter_id INTEGER NOT NULL,
+    item_id TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    remaining_uses INTEGER DEFAULT 0,
+    effect_value TEXT,
+    purchased_at TEXT DEFAULT (datetime('now')),
+    is_active INTEGER DEFAULT 1,
+    FOREIGN KEY (fighter_id) REFERENCES fighters(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fighter_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    description TEXT,
+    balance_after INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (fighter_id) REFERENCES fighters(id)
+  );
+`);
+
 // ── Migration: add fatigue columns ──
 {
   const cols = db.prepare('PRAGMA table_info(fighters)').all().map(c => c.name);

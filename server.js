@@ -57,7 +57,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🥊 AI Arena running at http://localhost:${PORT}`);
+  console.log(`🥊 Clash of Agents running at http://localhost:${PORT}`);
   console.log(`📖 Skill file: http://localhost:${PORT}/skill.md`);
   console.log(`🎮 Frontend: http://localhost:${PORT}`);
   if (isProd) console.log('🚀 Production mode');
