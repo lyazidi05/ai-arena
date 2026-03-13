@@ -587,6 +587,26 @@
       padding: 2px 8px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
     }
 
+    /* ══════════════ ACTIVITY TAB ══════════════ */
+    .act-status-badge {
+      display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 1.5px;
+      padding: 4px 12px; border-radius: 20px; text-transform: uppercase;
+    }
+    .act-status-badge.resting   { background: rgba(45,198,83,0.15); color: #2dc653; border: 1px solid #2dc653; }
+    .act-status-badge.recovering { background: rgba(244,165,52,0.15); color: #f4a534; border: 1px solid #f4a534; }
+    .act-status-badge.fighting  { background: rgba(230,57,70,0.15); color: var(--red); border: 1px solid var(--red); }
+    .act-train-entry {
+      display: flex; align-items: center; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .act-train-entry:last-child { border-bottom: none; }
+    .act-stat-dot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .act-train-stat { font-size: 0.85rem; font-weight: 700; min-width: 80px; }
+    .act-train-gain { font-size: 0.82rem; color: #2dc653; font-weight: 600; min-width: 50px; }
+    .act-train-date { font-size: 0.75rem; color: var(--muted); margin-left: auto; }
+
     /* ══════════════ PHASE 2.1 — COMBO LOG ══════════════ */
     .log-combo { color: var(--gold) !important; font-weight: 700; }
 
@@ -1025,6 +1045,7 @@
         <button class="stats-tab-btn active" onclick="switchStatsTab('history')">Fight History</button>
         <button class="stats-tab-btn" onclick="switchStatsTab('adv')">Analytics</button>
         <button class="stats-tab-btn" onclick="switchStatsTab('radar')">Radar</button>
+        <button class="stats-tab-btn" onclick="switchStatsTab('activity')">Activité</button>
       </div>
 
       <!-- History tab -->
@@ -1046,6 +1067,24 @@
       <!-- Radar tab -->
       <div class="stats-tab-pane" id="tab-radar">
         <div class="chart-wrap" style="height:260px"><canvas id="chart-radar"></canvas></div>
+      </div>
+
+      <!-- Activity tab -->
+      <div class="stats-tab-pane" id="tab-activity">
+        <div id="act-status-row" style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <span id="act-status-badge" class="act-status-badge">—</span>
+          <span id="act-fight-link" style="font-size:0.8rem;color:var(--muted)"></span>
+        </div>
+        <div style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:1px;margin-bottom:6px">FATIGUE</div>
+        <div class="fatigue-row" style="margin-bottom:14px">
+          <span style="font-size:0.78rem;color:var(--muted)">0</span>
+          <div class="fatigue-bar-bg" style="flex:1"><div class="fatigue-fill" id="act-fatigue-fill" style="width:0%"></div></div>
+          <span class="fatigue-val" id="act-fatigue-val">0</span>
+        </div>
+        <div style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:1px;margin-bottom:6px">PROCHAIN ENTRAÎNEMENT</div>
+        <div id="act-cooldown" style="font-size:1rem;font-weight:700;color:var(--fg);margin-bottom:16px">—</div>
+        <div style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:1px;margin-bottom:8px">HISTORIQUE D'ENTRAÎNEMENT</div>
+        <div id="act-train-log"></div>
       </div>
     </div>
   </div>
@@ -1268,6 +1307,12 @@ async function openProfile(name) {
     renderRadar(fRes);
   }, 120);
 
+  // Activity tab
+  const actRes = await fetch(`${API}/fighters/${encodeURIComponent(name)}/activity`).then(r => r.json()).catch(() => null);
+  if (actRes && !actRes.error) {
+    renderActivity(actRes);
+  }
+
   // Rivals section
   const rivalsRes = await fetch(`${API}/fighters/${encodeURIComponent(name)}/rivals`).then(r => r.json()).catch(() => null);
   const rivals = rivalsRes?.rivals || [];
@@ -1288,21 +1333,91 @@ async function openProfile(name) {
 function closeProfile() {
   document.getElementById('profile-overlay').classList.remove('open');
   document.body.style.overflow = '';
-  // Destroy charts to free memory
   ['chart-elo','chart-methods','chart-radar'].forEach(id => {
     const c = Chart.getChart(id);
     if (c) c.destroy();
   });
+  if (window._actCdInterval) { clearInterval(window._actCdInterval); window._actCdInterval = null; }
 }
 
 function switchStatsTab(tab) {
   document.querySelectorAll('.stats-tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.stats-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + tab)?.classList.add('active');
+  const tabLabels = { history: 'history', adv: 'analytics', radar: 'radar', activity: 'activité' };
+  const label = tabLabels[tab] || tab;
   document.querySelectorAll('.stats-tab-btn').forEach(b => {
-    if (b.textContent.toLowerCase().includes(tab === 'history' ? 'history' : tab === 'adv' ? 'analytics' : 'radar'))
-      b.classList.add('active');
+    if (b.textContent.toLowerCase().includes(label)) b.classList.add('active');
   });
+}
+
+function renderActivity(act) {
+  // Status badge
+  const badge = document.getElementById('act-status-badge');
+  const statusLabels = { resting: '😴 Repos', recovering: '⏳ Récupération', fighting: '🥊 En combat' };
+  badge.textContent = statusLabels[act.status] || act.status;
+  badge.className = `act-status-badge ${act.status}`;
+
+  // Fight link
+  const fightLink = document.getElementById('act-fight-link');
+  if (act.fight_id) {
+    fightLink.innerHTML = `<a href="#" onclick="openArena(${act.fight_id});return false" style="color:var(--red)">→ Combat #${act.fight_id}</a>`;
+  } else {
+    fightLink.textContent = '';
+  }
+
+  // Fatigue bar
+  const fatigue = act.fatigue ?? 0;
+  const fatColor = fatigue < 40 ? '#2dc653' : fatigue < 70 ? '#f4a534' : '#e63946';
+  const fill = document.getElementById('act-fatigue-fill');
+  const val = document.getElementById('act-fatigue-val');
+  fill.style.background = fatColor;
+  val.textContent = fatigue;
+  val.style.color = fatColor;
+  requestAnimationFrame(() => setTimeout(() => { fill.style.width = fatigue + '%'; }, 80));
+
+  // Cooldown
+  const cdEl = document.getElementById('act-cooldown');
+  if (act.can_train) {
+    cdEl.innerHTML = '<span style="color:#2dc653;font-weight:700">✓ Prêt à s\'entraîner</span>';
+  } else {
+    const ms = act.cooldown_remaining_ms;
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
+    cdEl.textContent = `${mins}m ${secs}s`;
+    // Live countdown
+    if (window._actCdInterval) clearInterval(window._actCdInterval);
+    let remaining = ms;
+    window._actCdInterval = setInterval(() => {
+      remaining -= 1000;
+      if (remaining <= 0) {
+        clearInterval(window._actCdInterval);
+        cdEl.innerHTML = '<span style="color:#2dc653;font-weight:700">✓ Prêt à s\'entraîner</span>';
+        return;
+      }
+      const m = Math.floor(remaining / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      cdEl.textContent = `${m}m ${s}s`;
+    }, 1000);
+  }
+
+  // Training log
+  const logEl = document.getElementById('act-train-log');
+  if (!act.training_log || act.training_log.length === 0) {
+    logEl.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Aucun entraînement récent</div>';
+    return;
+  }
+  logEl.innerHTML = act.training_log.map(entry => {
+    const color = STAT_COLOR[entry.stat] || '#888';
+    const d = new Date(entry.date);
+    const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="act-train-entry">
+      <div class="act-stat-dot" style="background:${color}"></div>
+      <div class="act-train-stat" style="color:${color}">${entry.stat.charAt(0).toUpperCase() + entry.stat.slice(1)}</div>
+      <div class="act-train-gain">+${entry.gain}</div>
+      <div class="act-train-date">${dateStr}</div>
+    </div>`;
+  }).join('');
 }
 
 const CHART_DEFAULTS = {

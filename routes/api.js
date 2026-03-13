@@ -353,6 +353,50 @@ router.get('/fighters/:name/stats', (req, res) => {
   });
 });
 
+// GET /fighters/:name/activity — current status + training history + cooldown
+router.get('/fighters/:name/activity', (req, res) => {
+  const f = db.prepare('SELECT * FROM fighters WHERE name = ?').get(req.params.name);
+  if (!f) return res.status(404).json({ error: 'Fighter not found' });
+
+  // Current status
+  const activeFight = db.prepare(`
+    SELECT id FROM fights
+    WHERE (fighter1_id = ? OR fighter2_id = ?) AND status IN ('active','pending')
+    LIMIT 1
+  `).get(f.id, f.id);
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const fatigue = currentFatigue(f);
+  const lastTrainedAt = f.last_trained_at || 0;
+  const cooldownMs = TRAINING_COOLDOWN_MS;
+  const elapsedMs = (nowSec - lastTrainedAt) * 1000;
+  const remainingMs = Math.max(0, cooldownMs - elapsedMs);
+
+  let status = 'resting';
+  if (activeFight) status = 'fighting';
+  else if (remainingMs > 0 && lastTrainedAt > 0) status = 'recovering';
+
+  // Last 5 training sessions
+  const trainLog = db.prepare(`
+    SELECT stat, gain, created_at FROM training_log
+    WHERE fighter_id = ? ORDER BY id DESC LIMIT 5
+  `).all(f.id).map(r => ({
+    stat: r.stat,
+    gain: Math.round(r.gain * 100) / 100,
+    date: new Date(r.created_at * 1000).toISOString(),
+  }));
+
+  res.json({
+    status,
+    fight_id: activeFight?.id || null,
+    fatigue: Math.round(fatigue),
+    can_train: remainingMs === 0,
+    cooldown_remaining_ms: Math.round(remainingMs),
+    last_trained_at: lastTrainedAt > 0 ? new Date(lastTrainedAt * 1000).toISOString() : null,
+    training_log: trainLog,
+  });
+});
+
 // GET /rivalries — all confirmed rivalries
 router.get('/rivalries', (req, res) => {
   const rows = db.prepare(`
