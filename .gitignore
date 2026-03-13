@@ -1,0 +1,6 @@
+node_modules/
+.env
+db/arena.db
+*.db-shm
+*.db-wal
+.DS_Store

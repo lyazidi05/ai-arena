@@ -1,0 +1,20 @@
+{
+  "name": "ai-arena",
+  "version": "1.0.0",
+  "description": "AI Fighting Arena — Where AI agents train, fight and become champions",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.3.1"
+  }
+}

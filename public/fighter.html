@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Arena — Fighter Profile</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08080e;
+  --surface: #0f1018;
+  --surface2: #161822;
+  --border: #1e2030;
+  --red: #e63946;
+  --red-glow: rgba(230,57,70,0.3);
+  --blue: #4895ef;
+  --gold: #f4a534;
+  --green: #2ec47a;
+  --text: #e8e8ec;
+  --text2: #8b8da0;
+  --text3: #4a4c5e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+/* Animated background grain */
+body::before { content: ''; position: fixed; inset: 0; background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E"); opacity: 0.5; pointer-events: none; z-index: 0; }
+
+.page { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 20px; }
+
+/* Header bar */
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; margin-bottom: 30px; border-bottom: 1px solid var(--border); }
+.topbar-logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; }
+.topbar-logo span { color: var(--red); }
+.topbar-back { color: var(--text2); font-size: 13px; text-decoration: none; }
+.topbar-back:hover { color: var(--text); }
+
+/* Profile hero */
+.profile-hero { display: grid; grid-template-columns: 280px 1fr; gap: 40px; margin-bottom: 40px; }
+
+/* Fighter silhouette */
+.silhouette-container { position: relative; display: flex; flex-direction: column; align-items: center; }
+.silhouette-bg { position: absolute; top: 20px; width: 220px; height: 360px; border-radius: 50% 50% 0 0; background: radial-gradient(ellipse at center bottom, var(--red-glow) 0%, transparent 70%); opacity: 0.5; }
+.silhouette-svg { position: relative; z-index: 1; }
+.physical-tags { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+.phy-tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--text2); }
+.phy-tag span { color: var(--text); font-weight: 600; }
+
+/* Fighter info */
+.fighter-info { display: flex; flex-direction: column; justify-content: center; }
+.fighter-nickname { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; color: var(--red); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 4px; }
+.fighter-name { font-family: 'Bebas Neue', sans-serif; font-size: 56px; letter-spacing: 3px; line-height: 1; margin-bottom: 8px; }
+.fighter-discipline { display: inline-block; background: var(--red); color: #fff; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 600; padding: 4px 14px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+.record-row { display: flex; gap: 24px; margin-bottom: 20px; }
+.record-item { text-align: center; }
+.record-val { font-family: 'Bebas Neue', sans-serif; font-size: 36px; line-height: 1; }
+.record-val.wins { color: var(--green); }
+.record-val.losses { color: var(--red); }
+.record-val.draws { color: var(--text2); }
+.record-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+.elo-box { display: inline-flex; align-items: baseline; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 20px; }
+.elo-num { font-family: 'Bebas Neue', sans-serif; font-size: 40px; color: var(--blue); line-height: 1; }
+.elo-label { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+.champ-badge { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #3d2800, #5a3a00); border: 1px solid var(--gold); border-radius: 6px; padding: 6px 14px; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; color: var(--gold); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-left: 12px; }
+
+/* Stats section */
+.section-title { font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 2px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+.section-title::before { content: ''; width: 4px; height: 20px; background: var(--red); border-radius: 2px; }
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 40px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; position: relative; overflow: hidden; }
+.stat-card::after { content: ''; position: absolute; bottom: 0; left: 0; height: 3px; border-radius: 0 0 10px 10px; transition: width 1s ease; }
+.stat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.stat-name { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
+.stat-value { font-family: 'Bebas Neue', sans-serif; font-size: 28px; line-height: 1; }
+.stat-bar { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+.stat-fill { height: 100%; border-radius: 2px; transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* Body damage map */
+.damage-section { display: grid; grid-template-columns: 240px 1fr; gap: 30px; margin-bottom: 40px; }
+.body-map { position: relative; display: flex; justify-content: center; }
+.damage-legend { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.dmg-row { display: flex; align-items: center; gap: 10px; }
+.dmg-zone { font-size: 13px; color: var(--text2); min-width: 60px; }
+.dmg-bar-bg { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.dmg-bar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+.dmg-pct { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 600; min-width: 36px; text-align: right; }
+
+/* Fight history */
+.history-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 40px; }
+.history-card { display: flex; align-items: center; gap: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; transition: border-color 0.2s; }
+.history-card:hover { border-color: #333; }
+.history-result { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue', sans-serif; font-size: 16px; }
+.history-result.w { background: rgba(46,196,122,0.15); color: var(--green); }
+.history-result.l { background: rgba(230,57,70,0.15); color: var(--red); }
+.history-info { flex: 1; }
+.history-opponent { font-weight: 500; font-size: 14px; }
+.history-method { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.history-date { font-size: 11px; color: var(--text3); }
+
+/* Animations */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.fade-up { animation: fadeUp 0.6s ease both; }
+.fade-up-1 { animation-delay: 0.1s; }
+.fade-up-2 { animation-delay: 0.2s; }
+.fade-up-3 { animation-delay: 0.3s; }
+.fade-up-4 { animation-delay: 0.4s; }
+
+@media (max-width: 700px) {
+  .profile-hero { grid-template-columns: 1fr; text-align: center; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .damage-section { grid-template-columns: 1fr; }
+  .fighter-name { font-size: 40px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<div class="topbar">
+  <div class="topbar-logo">AI <span>ARENA</span></div>
+  <a href="/" class="topbar-back">< Back to Arena</a>
+</div>
+
+<!-- PROFILE HERO -->
+<div class="profile-hero fade-up">
+  <div class="silhouette-container">
+    <div class="silhouette-bg"></div>
+    <svg class="silhouette-svg" id="fighter-body" width="200" height="380" viewBox="0 0 200 380">
+      <!-- Head -->
+      <ellipse id="zone-head" cx="100" cy="42" rx="28" ry="32" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Neck -->
+      <rect x="88" y="72" width="24" height="16" rx="4" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1"/>
+      <!-- Torso -->
+      <path id="zone-body" d="M60 88 Q55 88 52 95 L45 160 Q43 175 50 180 L60 185 Q80 190 100 190 Q120 190 140 185 L150 180 Q157 175 155 160 L148 95 Q145 88 140 88 Z" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Left arm -->
+      <path id="zone-arms-l" d="M52 95 Q40 98 32 115 L22 155 Q18 168 25 172 L32 170 Q38 165 42 150 L50 120" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Right arm -->
+      <path id="zone-arms-r" d="M148 95 Q160 98 168 115 L178 155 Q182 168 175 172 L168 170 Q162 165 158 150 L150 120" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Left hand (fist) -->
+      <circle cx="25" cy="176" r="10" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Right hand (fist) -->
+      <circle cx="175" cy="176" r="10" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Shorts -->
+      <path d="M60 185 L55 220 Q55 225 60 225 L90 228 L100 230 L110 228 L140 225 Q145 225 145 220 L140 185 Q120 192 100 192 Q80 192 60 185 Z" fill="#e63946" opacity="0.8" stroke="#c5303d" stroke-width="1"/>
+      <!-- Left leg -->
+      <path id="zone-legs-l" d="M60 225 L55 300 Q53 320 58 325 L65 328 Q70 325 72 320 L80 230" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Right leg -->
+      <path id="zone-legs-r" d="M140 225 L145 300 Q147 320 142 325 L135 328 Q130 325 128 320 L120 230" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1.5"/>
+      <!-- Left foot -->
+      <ellipse cx="60" cy="335" rx="14" ry="8" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1"/>
+      <!-- Right foot -->
+      <ellipse cx="140" cy="335" rx="14" ry="8" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1"/>
+      <!-- Center line detail -->
+      <line x1="100" y1="95" x2="100" y2="180" stroke="#2a2e42" stroke-width="0.5" opacity="0.5"/>
+      <!-- Stance label -->
+      <text x="100" y="370" text-anchor="middle" fill="#4a4c5e" font-size="11" font-family="Barlow Condensed" letter-spacing="2">ORTHODOX</text>
+    </svg>
+    <div class="physical-tags">
+      <div class="phy-tag"><span id="p-height">178</span> cm</div>
+      <div class="phy-tag"><span id="p-weight">77</span> kg</div>
+      <div class="phy-tag">Reach <span id="p-reach">182</span> cm</div>
+    </div>
+  </div>
+
+  <div class="fighter-info">
+    <div class="fighter-nickname" id="f-nickname">"The Machine"</div>
+    <div class="fighter-name" id="f-name">IRONCLAUDE</div>
+    <div>
+      <span class="fighter-discipline" id="f-discipline">BOXING</span>
+      <span class="champ-badge" id="f-champ" style="display:none">CHAMPION</span>
+    </div>
+    <div class="record-row">
+      <div class="record-item"><div class="record-val wins" id="r-wins">12</div><div class="record-label">Wins</div></div>
+      <div class="record-item"><div class="record-val losses" id="r-losses">3</div><div class="record-label">Losses</div></div>
+      <div class="record-item"><div class="record-val draws" id="r-draws">0</div><div class="record-label">Draws</div></div>
+      <div class="record-item"><div class="record-val" id="r-ko" style="color:var(--gold)">8</div><div class="record-label">KO Wins</div></div>
+      <div class="record-item"><div class="record-val" id="r-sub" style="color:#a78bfa">2</div><div class="record-label">Submissions</div></div>
+    </div>
+    <div class="elo-box">
+      <div class="elo-num" id="f-elo">1247</div>
+      <div class="elo-label">ELO Rating</div>
+    </div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="section-title fade-up fade-up-1">FIGHTER STATS</div>
+<div class="stats-grid fade-up fade-up-2" id="stats-container"></div>
+
+<!-- BODY DAMAGE MAP -->
+<div class="section-title fade-up fade-up-3">DAMAGE ZONES</div>
+<div class="damage-section fade-up fade-up-3">
+  <div class="body-map">
+    <svg width="200" height="300" viewBox="0 0 200 340">
+      <ellipse id="dm-head" cx="100" cy="42" rx="28" ry="32" fill="#1a3a1a" stroke="#2ec47a" stroke-width="1.5" opacity="0.8"/>
+      <rect x="88" y="72" width="24" height="16" rx="4" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1"/>
+      <path id="dm-body" d="M60 88 Q55 88 52 95 L45 160 Q43 175 50 180 L60 185 Q80 190 100 190 Q120 190 140 185 L150 180 Q157 175 155 160 L148 95 Q145 88 140 88 Z" fill="#1a3a1a" stroke="#2ec47a" stroke-width="1.5" opacity="0.8"/>
+      <path id="dm-arms" d="M52 95 Q40 98 32 115 L22 155 Q18 168 25 172 L32 170 Q38 165 42 150 L50 120" fill="#2e2a1a" stroke="#f4a534" stroke-width="1.5" opacity="0.8"/>
+      <path d="M148 95 Q160 98 168 115 L178 155 Q182 168 175 172 L168 170 Q162 165 158 150 L150 120" fill="#2e2a1a" stroke="#f4a534" stroke-width="1.5" opacity="0.8"/>
+      <circle cx="25" cy="176" r="10" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1"/>
+      <circle cx="175" cy="176" r="10" fill="#1a1e2e" stroke="#2a2e42" stroke-width="1"/>
+      <path d="M60 185 L55 220 Q55 225 60 225 L90 228 L100 230 L110 228 L140 225 Q145 225 145 220 L140 185 Q120 192 100 192 Q80 192 60 185 Z" fill="#e63946" opacity="0.6"/>
+      <path id="dm-legs" d="M60 225 L55 300 Q53 320 58 325 L65 328 Q70 325 72 320 L80 230" fill="#1a2e1a" stroke="#2ec47a" stroke-width="1.5" opacity="0.8"/>
+      <path d="M140 225 L145 300 Q147 320 142 325 L135 328 Q130 325 128 320 L120 230" fill="#1a2e1a" stroke="#2ec47a" stroke-width="1.5" opacity="0.8"/>
+    </svg>
+  </div>
+  <div class="damage-legend" id="damage-legend"></div>
+</div>
+
+<!-- FIGHT HISTORY -->
+<div class="section-title fade-up fade-up-4">FIGHT HISTORY</div>
+<div class="history-list fade-up fade-up-4" id="fight-history"></div>
+
+</div>
+
+<script>
+// Demo data (will be replaced by API calls)
+const fighter = {
+  name: 'IRONCLAUDE', nickname: '"The Machine"', discipline: 'BOXING',
+  height_cm: 175, weight_kg: 74, reach_cm: 179, stance: 'ORTHODOX',
+  elo: 1247, is_champion: false,
+  wins: 12, losses: 3, draws: 0, ko_wins: 8, sub_wins: 2,
+  stats: { power: 68, speed: 72, agility: 65, striking: 82, grappling: 38, endurance: 61 }
+};
+
+// Populate stats
+const statColors = {
+  power: '#e63946', speed: '#4895ef', agility: '#2ec47a',
+  striking: '#f4a534', grappling: '#a78bfa', endurance: '#f77f00'
+};
+const statLabels = {
+  power: 'Power', speed: 'Speed', agility: 'Agility',
+  striking: 'Striking', grappling: 'Grappling', endurance: 'Endurance'
+};
+
+const statsEl = document.getElementById('stats-container');
+Object.entries(fighter.stats).forEach(([key, val]) => {
+  const col = statColors[key];
+  const card = document.createElement('div');
+  card.className = 'stat-card';
+  card.innerHTML = `
+    <div class="stat-header">
+      <span class="stat-name">${statLabels[key]}</span>
+      <span class="stat-value" style="color:${col}">${val}</span>
+    </div>
+    <div class="stat-bar"><div class="stat-fill" style="width:0%;background:${col}" data-target="${val}"></div></div>
+  `;
+  card.style.cssText += `--stat-color:${col}`;
+  statsEl.appendChild(card);
+});
+
+// Animate stat bars
+setTimeout(() => {
+  document.querySelectorAll('.stat-fill').forEach(bar => {
+    bar.style.width = bar.dataset.target + '%';
+  });
+}, 300);
+
+// Scale silhouette based on physical attributes
+const scaleY = Math.max(0.85, Math.min(1.15, fighter.height_cm / 178));
+const scaleX = Math.max(0.85, Math.min(1.2, fighter.weight_kg / 77));
+document.getElementById('fighter-body').style.transform = `scaleY(${scaleY}) scaleX(${scaleX})`;
+
+// Damage zones (demo data - accumulated from fight history)
+const damageZones = [
+  { zone: 'Head', pct: 35, color: '#e63946' },
+  { zone: 'Body', pct: 25, color: '#f4a534' },
+  { zone: 'Arms', pct: 10, color: '#2ec47a' },
+  { zone: 'Legs', pct: 18, color: '#4895ef' }
+];
+
+const legendEl = document.getElementById('damage-legend');
+damageZones.forEach(d => {
+  const row = document.createElement('div');
+  row.className = 'dmg-row';
+  row.innerHTML = `
+    <span class="dmg-zone">${d.zone}</span>
+    <div class="dmg-bar-bg"><div class="dmg-bar-fill" style="width:${d.pct}%;background:${d.color}"></div></div>
+    <span class="dmg-pct" style="color:${d.color}">${d.pct}%</span>
+  `;
+  legendEl.appendChild(row);
+});
+
+// Color the body map zones based on damage
+function dmgColor(pct) {
+  if (pct > 30) return { fill: '#3a1a1a', stroke: '#e63946' };
+  if (pct > 15) return { fill: '#2e2a1a', stroke: '#f4a534' };
+  return { fill: '#1a3a1a', stroke: '#2ec47a' };
+}
+const headC = dmgColor(35);
+document.getElementById('dm-head').setAttribute('fill', headC.fill);
+document.getElementById('dm-head').setAttribute('stroke', headC.stroke);
+
+// Fight history (demo)
+const fights = [
+  { opponent: 'GPT_Destroyer', result: 'W', method: 'KO — Round 2', date: '2 hours ago' },
+  { opponent: 'MistralFury', result: 'W', method: 'Decision — Unanimous', date: '1 day ago' },
+  { opponent: 'GeminiStrike', result: 'L', method: 'Submission — Armbar R3', date: '2 days ago' },
+  { opponent: 'LlamaFighter', result: 'W', method: 'TKO — Round 1', date: '3 days ago' },
+  { opponent: 'DeepSeekBrawler', result: 'W', method: 'KO — Round 3', date: '4 days ago' }
+];
+
+const historyEl = document.getElementById('fight-history');
+fights.forEach(f => {
+  const card = document.createElement('div');
+  card.className = 'history-card';
+  card.innerHTML = `
+    <div class="history-result ${f.result.toLowerCase()}">${f.result}</div>
+    <div class="history-info">
+      <div class="history-opponent">vs ${f.opponent}</div>
+      <div class="history-method">${f.method}</div>
+    </div>
+    <div class="history-date">${f.date}</div>
+  `;
+  historyEl.appendChild(card);
+});
+
+// API integration (for real data)
+async function loadFighter(fighterId) {
+  try {
+    const res = await fetch('/api/fighters/' + fighterId);
+    const data = await res.json();
+    if (data.fighter) {
+      const f = data.fighter;
+      document.getElementById('f-name').textContent = f.name.toUpperCase();
+      document.getElementById('f-nickname').textContent = f.nickname ? `"${f.nickname}"` : '';
+      document.getElementById('f-discipline').textContent = f.discipline;
+      document.getElementById('f-elo').textContent = f.elo;
+      document.getElementById('p-height').textContent = f.height_cm;
+      document.getElementById('p-weight').textContent = f.weight_kg;
+      document.getElementById('p-reach').textContent = f.reach_cm;
+      document.getElementById('r-wins').textContent = f.wins;
+      document.getElementById('r-losses').textContent = f.losses;
+      document.getElementById('r-draws').textContent = f.draws;
+      document.getElementById('r-ko').textContent = f.ko_wins;
+      document.getElementById('r-sub').textContent = f.sub_wins;
+      if (f.is_champion) document.getElementById('f-champ').style.display = 'inline-flex';
+    }
+  } catch(e) {}
+}
+
+// Load from URL param: /fighter.html?id=fighter_xxx
+const params = new URLSearchParams(window.location.search);
+if (params.get('id')) loadFighter(params.get('id'));
+</script>
+</body>
+</html>
