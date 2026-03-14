@@ -1852,7 +1852,7 @@ router.post('/auth/register', async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
   if (username.length < 3 || username.length > 20) return res.status(400).json({ error: 'Username must be 3–20 characters' });
   if (!/^[a-zA-Z0-9_-]+$/.test(username)) return res.status(400).json({ error: 'Username: letters, numbers, _ and - only' });
-  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
   const emailLower = email.trim().toLowerCase();
   if (db.prepare('SELECT id FROM human_users WHERE email = ?').get(emailLower)) return res.status(409).json({ error: 'Email already registered' });

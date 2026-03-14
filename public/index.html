@@ -2697,6 +2697,7 @@ async function handleSignIn() {
   const btn = document.getElementById('si-btn');
   errEl.style.display = 'none';
   if (!email || !password) { errEl.textContent = 'Please fill all fields'; errEl.style.display = 'block'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Invalid email format'; errEl.style.display = 'block'; return; }
   btn.disabled = true; btn.textContent = 'Signing in…';
   try {
     const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
@@ -2715,6 +2716,10 @@ async function handleSignUp() {
   const btn      = document.getElementById('su-btn');
   errEl.style.display = 'none';
   if (!username || !email || !password) { errEl.textContent = 'Please fill all fields'; errEl.style.display = 'block'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Invalid email format'; errEl.style.display = 'block'; return; }
+  if (username.length < 3 || username.length > 20) { errEl.textContent = 'Username must be 3-20 characters'; errEl.style.display = 'block'; return; }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) { errEl.textContent = 'Username: letters, numbers and _ only'; errEl.style.display = 'block'; return; }
+  if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters'; errEl.style.display = 'block'; return; }
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
     const r = await fetch('/api/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, email, password }) });
@@ -2917,14 +2922,14 @@ if (new URLSearchParams(location.search).get('signup') === '1') {
     </div>
     <div class="auth-field">
       <label>Email</label>
-      <input type="email" id="signin-email" placeholder="your@email.com" autocomplete="email">
+      <input type="email" id="si-email" placeholder="your@email.com" autocomplete="email">
     </div>
     <div class="auth-field">
       <label>Password</label>
-      <input type="password" id="signin-password" placeholder="••••••••" autocomplete="current-password">
+      <input type="password" id="si-password" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <div class="auth-err" id="signin-err"></div>
-    <button class="auth-submit-btn" id="signin-btn" onclick="handleSignIn()">Sign In</button>
+    <div class="auth-err" id="si-err"></div>
+    <button class="auth-submit-btn" id="si-btn" onclick="handleSignIn()">Sign In</button>
     <div class="auth-switch">No account? <button onclick="openAuthModal('signup')">Sign Up</button></div>
   </div>
 </div>
@@ -2938,18 +2943,18 @@ if (new URLSearchParams(location.search).get('signup') === '1') {
     </div>
     <div class="auth-field">
       <label>Username</label>
-      <input type="text" id="signup-username" placeholder="CoolSpectator42" autocomplete="username">
+      <input type="text" id="su-username" placeholder="CoolSpectator42" autocomplete="username">
     </div>
     <div class="auth-field">
       <label>Email</label>
-      <input type="email" id="signup-email" placeholder="your@email.com" autocomplete="email">
+      <input type="email" id="su-email" placeholder="your@email.com" autocomplete="email">
     </div>
     <div class="auth-field">
       <label>Password</label>
-      <input type="password" id="signup-password" placeholder="••••••••" autocomplete="new-password">
+      <input type="password" id="su-password" placeholder="••••••••" autocomplete="new-password">
     </div>
-    <div class="auth-err" id="signup-err"></div>
-    <button class="auth-submit-btn" id="signup-btn" onclick="handleSignUp()">Create Account</button>
+    <div class="auth-err" id="su-err"></div>
+    <button class="auth-submit-btn" id="su-btn" onclick="handleSignUp()">Create Account</button>
     <div class="auth-switch">Already have an account? <button onclick="openAuthModal('signin')">Sign In</button></div>
   </div>
 </div>
