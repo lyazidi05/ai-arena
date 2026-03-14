@@ -751,9 +751,24 @@
     .user-dd-item.danger { color: var(--red); }
     .user-dd-sep { border-top: 1px solid var(--border); }
     /* ── FAV BUTTON ── */
-    .fav-btn { position: absolute; top: 7px; left: 7px; background: rgba(0,0,0,0.55); border: 1px solid var(--border); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; transition: all 0.2s; z-index: 2; color: var(--muted2); line-height: 1; }
-    .fav-btn:hover { border-color: var(--red); color: var(--red); transform: scale(1.15); }
-    .fav-btn.faved { border-color: var(--red); color: var(--red); }
+    .fav-btn { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); border: 1px solid var(--border); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; z-index: 2; line-height: 1; padding: 0; }
+    .fav-btn svg { width: 18px; height: 18px; }
+    .fav-btn .star-outline { fill: none; stroke: var(--muted); stroke-width: 2; transition: all 0.2s; }
+    .fav-btn .star-filled { fill: #f4a534; stroke: #f4a534; stroke-width: 2; display: none; transition: all 0.2s; }
+    .fav-btn:hover { border-color: #f4a534; transform: scale(1.1); }
+    .fav-btn:hover .star-outline { stroke: #f4a534; }
+    .fav-btn.faved .star-outline { display: none; }
+    .fav-btn.faved .star-filled { display: block; }
+    .fav-btn.faved { border-color: #f4a534; }
+    /* nav fav badge */
+    .nav-fav-badge { background: #f4a534; color: #000; font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 5px; vertical-align: middle; }
+    /* profile fav button */
+    .pro-fav-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 12px; }
+    .pro-fav-btn:hover { border-color: #f4a534; background: rgba(244,165,52,0.1); }
+    .pro-fav-btn.faved { border-color: #f4a534; color: #f4a534; }
+    .pro-fav-btn svg { width: 18px; height: 18px; }
+    /* fav card fade out */
+    .fighter-card.fav-removing { opacity: 0; transform: scale(0.95); transition: all 0.3s ease; }
     /* ── MY PANEL OVERLAY ── */
     .my-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 250; display: none; overflow-y: auto; }
     .my-overlay.open { display: block; }
@@ -803,6 +818,7 @@
 <nav>
   <button class="active" data-tab="home" onclick="showTab('home')">Home</button>
   <button data-tab="fighters" onclick="showTab('fighters')">Fighters</button>
+  <button data-tab="favorites" onclick="showTab('favorites')" id="nav-favorites" style="display:none">Favorites <span class="nav-fav-badge" id="nav-fav-count" style="display:none">0</span></button>
   <button data-tab="leaderboard" onclick="showTab('leaderboard')">Leaderboard</button>
   <button data-tab="fights" onclick="showTab('fights')">Fights <span class="nav-live" id="nav-live-badge">0</span></button>
   <button data-tab="champions" onclick="showTab('champions')">Champions</button>
@@ -848,6 +864,14 @@
   <p style="font-size:13px;color:var(--muted);margin-bottom:4px">Click a fighter to view their full profile</p>
   <div class="fighters-grid" id="fighters-list">
     <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading fighters...</div>
+  </div>
+</div>
+
+<!-- ══════════════ FAVORITES ══════════════ -->
+<div id="favorites" class="section">
+  <h2 style="margin-bottom:16px">⭐ My Favorites</h2>
+  <div id="favorites-list" class="fighters-grid">
+    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading favorites...</div>
   </div>
 </div>
 
@@ -1162,6 +1186,10 @@
           <div class="rec-item"><div class="rec-val" style="color:var(--purp)" id="pro-sub">0</div><div class="rec-lbl">Subs</div></div>
         </div>
         <div class="elo-box"><div class="elo-num" id="pro-elo">1000</div><div class="elo-lbl">ELO Rating</div></div>
+        <button class="pro-fav-btn" id="pro-fav-btn" onclick="toggleProfileFav()">
+          <svg viewBox="0 0 24 24"><polygon class="star-outline" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/><polygon class="star-filled" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" style="display:none"/></svg>
+          <span id="pro-fav-text">Add to Favorites</span>
+        </button>
       </div>
     </div>
 
@@ -1247,6 +1275,7 @@ function showTab(tab) {
   document.getElementById(tab).classList.add('active');
   document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
   if (tab === 'fighters') loadFighters();
+  if (tab === 'favorites') loadFavorites();
   if (tab === 'leaderboard') loadLeaderboard();
   if (tab === 'fights') { loadFightsView(); }
   if (tab === 'champions') loadChampions();
@@ -1338,7 +1367,7 @@ async function loadFighters() {
       ? ` onclick="event.stopPropagation();openArena(${st.fight_id})"` : '';
     const isFaved = myFavorites.has(String(f.id));
     return `<div class="fighter-card${isChamp ? ' champion' : ''} ${statusCls}" data-fighter-name="${f.name}" onclick="openProfile('${f.name}')">
-      <button class="fav-btn${isFaved ? ' faved' : ''}" data-fighter-id="${f.id}" onclick="toggleFav(${f.id},event)" title="${isFaved ? 'Remove favorite' : 'Add to favorites'}">♥</button>
+      <button class="fav-btn${isFaved ? ' faved' : ''}" data-fighter-id="${f.id}" onclick="toggleFav(${f.id},event)" title="${isFaved ? 'Remove favorite' : 'Add to favorites'}"><svg viewBox="0 0 24 24"><polygon class="star-outline" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/><polygon class="star-filled" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button>
       <div class="fc-silhouette">
         <svg width="50" height="95" viewBox="0 0 100 200">
           <ellipse class="head" cx="50" cy="22" rx="14" ry="16" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
@@ -1383,8 +1412,9 @@ async function openProfile(name) {
     fetch(`${API}/fighters/${encodeURIComponent(name)}/stats`).then(r => r.json()).catch(() => null),
   ]);
 
-  if (!fRes || fRes.error) { document.getElementById('pro-name').textContent = 'Not Found'; return; }
+  if (!fRes || fRes.error) { document.getElementById('pro-name').textContent = 'Not Found'; currentProfileFighterId = null; return; }
 
+  currentProfileFighterId = fRes.id;
   // Basic info
   document.getElementById('pro-name').textContent = fRes.name.toUpperCase();
   document.getElementById('pro-disc').textContent = fRes.discipline;
@@ -1403,6 +1433,7 @@ async function openProfile(name) {
   // Silhouette colour
   const color = DISC_COLOR[fRes.discipline] || '#888';
   document.getElementById('pro-glow').style.background = `radial-gradient(ellipse at center, ${color}33 0%, transparent 70%)`;
+  updateProfileFavBtn();
   document.getElementById('pro-shorts').setAttribute('fill', color);
   document.querySelectorAll('#pro-sil ellipse, #pro-sil path, #pro-sil circle, #pro-sil rect').forEach(el => {
     if (el.getAttribute('stroke') && el.getAttribute('stroke') !== 'none') el.setAttribute('stroke', color);
@@ -2653,11 +2684,13 @@ function initHumanAuth() {
 function renderAuthUI(user) {
   const area = document.getElementById('auth-area');
   if (!area) return;
+  const navFav = document.getElementById('nav-favorites');
   if (!user) {
     area.innerHTML = `<div class="auth-header-btns">
       <button class="btn-hdr-signin" onclick="openAuthModal('signin')">Sign In</button>
       <button class="btn-hdr-signup" onclick="openAuthModal('signup')">Sign Up</button>
     </div>`;
+    if (navFav) navFav.style.display = 'none';
   } else {
     area.innerHTML = `<div class="user-menu-wrap">
       <button class="user-menu-btn" onclick="toggleUserDropdown()">
@@ -2666,12 +2699,13 @@ function renderAuthUI(user) {
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       <div class="user-dropdown" id="user-dropdown">
-        <button class="user-dd-item" onclick="openMyPanel('favorites')">❤️ My Favorites</button>
+        <button class="user-dd-item" onclick="showTab('favorites')">⭐ My Favorites</button>
         <button class="user-dd-item" onclick="openMyPanel('agents')">🤖 My Agents</button>
         <div class="user-dd-sep"></div>
         <button class="user-dd-item danger" onclick="humanSignOut()">Sign Out</button>
       </div>
     </div>`;
+    if (navFav) navFav.style.display = '';
     const chatInput = document.getElementById('chat-name');
     if (chatInput) { chatInput.value = user.username; chatInput.readOnly = true; chatInput.style.opacity = '0.6'; }
   }
@@ -2754,10 +2788,14 @@ function humanSignOut() {
   localStorage.removeItem('coa_human_token');
   currentHumanUser = null; myFavorites.clear();
   renderAuthUI(null);
+  updateFavBadge();
   const chatInput = document.getElementById('chat-name');
   if (chatInput) { chatInput.readOnly = false; chatInput.style.opacity = ''; chatInput.value = ''; }
   document.querySelectorAll('.fav-btn').forEach(b => b.classList.remove('faved'));
   document.getElementById('user-dropdown')?.classList.remove('open');
+  // If on favorites tab, go back to home
+  const active = document.querySelector('.section.active');
+  if (active?.id === 'favorites') showTab('home');
 }
 
 async function fetchMyFavoriteIds() {
@@ -2766,26 +2804,117 @@ async function fetchMyFavoriteIds() {
     const r = await fetch('/api/favorites', { headers: { Authorization: 'Bearer ' + token } });
     const d = await r.json();
     myFavorites = new Set((d.favorites || []).map(f => String(f.id)));
-    document.querySelectorAll('.fav-btn').forEach(btn => {
-      btn.classList.toggle('faved', myFavorites.has(String(btn.dataset.fighterId)));
-    });
+    syncFavButtons();
+    updateFavBadge();
   } catch(e) {}
 }
 
+function syncFavButtons() {
+  document.querySelectorAll('.fav-btn').forEach(btn => {
+    btn.classList.toggle('faved', myFavorites.has(String(btn.dataset.fighterId)));
+  });
+}
+
+function updateFavBadge() {
+  const badge = document.getElementById('nav-fav-count');
+  if (!badge) return;
+  const count = myFavorites.size;
+  badge.textContent = count;
+  badge.style.display = count > 0 ? '' : 'none';
+}
+
 async function toggleFav(fighterId, event) {
-  event.stopPropagation();
+  if (event) event.stopPropagation();
   if (!currentHumanUser) { openAuthModal('signin'); return; }
   const token = getHumanToken();
   const id = String(fighterId);
   const isFav = myFavorites.has(id);
-  const btn = document.querySelector(`.fav-btn[data-fighter-id="${fighterId}"]`);
+  // Optimistic UI
+  const btns = document.querySelectorAll(`.fav-btn[data-fighter-id="${fighterId}"]`);
   if (isFav) {
-    myFavorites.delete(id); if (btn) btn.classList.remove('faved');
-    fetch(`/api/favorites/${fighterId}`, { method:'DELETE', headers:{ Authorization:'Bearer '+token } });
+    myFavorites.delete(id);
+    btns.forEach(b => b.classList.remove('faved'));
+    updateFavBadge();
+    // Fade-out in favorites tab
+    const favCard = document.querySelector(`#favorites-list .fighter-card[data-fav-id="${fighterId}"]`);
+    if (favCard) { favCard.classList.add('fav-removing'); setTimeout(() => { favCard.remove(); if (!document.querySelector('#favorites-list .fighter-card')) { document.getElementById('favorites-list').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">You haven\'t added any favorites yet. Browse fighters and click the star to add them.</div>'; } }, 300); }
+    const r = await fetch(`/api/favorites/${fighterId}`, { method:'DELETE', headers:{ Authorization:'Bearer '+token } });
+    if (!r.ok) { myFavorites.add(id); btns.forEach(b => b.classList.add('faved')); updateFavBadge(); }
   } else {
-    myFavorites.add(id); if (btn) btn.classList.add('faved');
-    fetch('/api/favorites/add', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({fighter_id:fighterId}) });
+    myFavorites.add(id);
+    btns.forEach(b => b.classList.add('faved'));
+    updateFavBadge();
+    const r = await fetch('/api/favorites/add', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({fighter_id:fighterId}) });
+    if (!r.ok) { myFavorites.delete(id); btns.forEach(b => b.classList.remove('faved')); updateFavBadge(); }
   }
+  updateProfileFavBtn();
+}
+
+let currentProfileFighterId = null;
+
+function updateProfileFavBtn() {
+  const btn = document.getElementById('pro-fav-btn');
+  const text = document.getElementById('pro-fav-text');
+  if (!btn || !currentProfileFighterId) return;
+  const isFav = myFavorites.has(String(currentProfileFighterId));
+  btn.classList.toggle('faved', isFav);
+  const outline = btn.querySelector('.star-outline');
+  const filled = btn.querySelector('.star-filled');
+  if (outline) outline.style.display = isFav ? 'none' : '';
+  if (filled) filled.style.display = isFav ? '' : 'none';
+  if (text) text.textContent = isFav ? 'Remove from Favorites' : 'Add to Favorites';
+}
+
+function toggleProfileFav() {
+  if (!currentProfileFighterId) return;
+  toggleFav(currentProfileFighterId, null);
+}
+
+const STAR_SVG = `<svg viewBox="0 0 24 24"><polygon class="star-outline" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/><polygon class="star-filled" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>`;
+
+async function loadFavorites() {
+  const el = document.getElementById('favorites-list');
+  const token = getHumanToken();
+  if (!token || !currentHumanUser) {
+    el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Sign in to view your favorites.</div>';
+    return;
+  }
+  el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
+  try {
+    const r = await fetch('/api/favorites', { headers: { Authorization: 'Bearer ' + token } });
+    const d = await r.json();
+    const favs = d.favorites || [];
+    if (!favs.length) {
+      el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">You haven\'t added any favorites yet. Browse fighters and click the star to add them.</div>';
+      return;
+    }
+    el.innerHTML = favs.map(f => {
+      const st = f.status || {};
+      const color = DISC_COLOR[f.discipline] || '#888';
+      return `<div class="fighter-card" data-fav-id="${f.id}" data-fighter-name="${esc(f.name)}" onclick="openProfile('${esc(f.name)}')" style="cursor:pointer">
+        <button class="fav-btn faved" data-fighter-id="${f.id}" onclick="toggleFav(${f.id},event)" title="Remove favorite">${STAR_SVG}</button>
+        <div class="fc-silhouette">
+          <svg width="50" height="95" viewBox="0 0 100 200">
+            <ellipse class="head" cx="50" cy="22" rx="14" ry="16" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
+            <path d="M30 45 Q28 45 26 50 L22 85 Q21 92 25 95 L30 97 Q40 100 50 100 Q60 100 70 97 L75 95 Q79 92 78 85 L74 50 Q72 45 70 45 Z" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
+            <path d="M26 50 Q20 52 18 62 L14 82" stroke="${color}" stroke-width="1.5" fill="none"/>
+            <path d="M74 50 Q80 52 82 58 L86 72" stroke="${color}" stroke-width="1.5" fill="none"/>
+            <path d="M30 97 L28 116 Q28 118 30 118 L45 120 L55 120 L70 118 Q72 118 72 116 L70 97 Z" fill="${color}" opacity=".7"/>
+            <path d="M30 118 L28 160 Q27 168 30 170 L40 121" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
+            <path d="M70 118 L72 160 Q73 168 70 170 L60 121" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="fc-name">${esc(f.name)}</div>
+        <div class="fc-disc">${disciplineBadge(f.discipline)}</div>
+        <div style="margin-top:6px">${statusBadgeHTML(st)}</div>
+        <div class="fc-stats">
+          <div class="fc-stat"><div class="v elo-v">${f.elo}</div><div class="l">ELO</div></div>
+          <div class="fc-stat"><div class="v win-v">${f.wins}</div><div class="l">Wins</div></div>
+          <div class="fc-stat"><div class="v loss-v">${f.losses}</div><div class="l">Losses</div></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--red)">Error loading favorites.</div>'; }
 }
 
 async function openMyPanel(view) {
@@ -2798,23 +2927,7 @@ async function openMyPanel(view) {
   body.innerHTML = '<p style="color:var(--muted);font-size:0.9rem">Loading…</p>';
 
   if (view === 'favorites') {
-    title.textContent = '❤️ My Favorites';
-    try {
-      const r = await fetch('/api/favorites', { headers:{ Authorization:'Bearer '+token } });
-      const d = await r.json();
-      const favs = d.favorites || [];
-      body.innerHTML = favs.length === 0
-        ? '<p style="color:var(--muted)">No favorites yet. Click ♥ on any fighter card.</p>'
-        : `<div class="fighters-grid" style="margin-top:0">${favs.map(f => `<div class="fighter-card" onclick="closeMyPanel();openProfile('${esc(f.name)}')" style="cursor:pointer">
-            <div class="fc-name">${esc(f.name)}</div>
-            <div class="fc-disc">${disciplineBadge(f.discipline)}</div>
-            <div style="margin-top:5px">${statusBadgeHTML(f.status||{})}</div>
-            <div class="fc-stats">
-              <div class="fc-stat"><div class="v elo-v">${f.elo}</div><div class="l">ELO</div></div>
-              <div class="fc-stat"><div class="v win-v">${f.wins}</div><div class="l">W</div></div>
-              <div class="fc-stat"><div class="v loss-v">${f.losses}</div><div class="l">L</div></div>
-            </div></div>`).join('')}</div>`;
-    } catch(e) { body.innerHTML = '<p style="color:var(--red)">Error loading favorites.</p>'; }
+    closeMyPanel(); showTab('favorites'); return;
   } else {
     title.textContent = '🤖 My Agents';
     try {
