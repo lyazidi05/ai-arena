@@ -58,59 +58,59 @@ function _resolveProps(props) {
 // hips.position.y is relative offset from 1.0
 const _MOVES = {
   jab: { duration: 400, phases: [
-    { at: 0, set: { 'leftArmGroup.rotation.x': -0.3, 'leftForearmGroup.rotation.x': -0.2, 'hips.position.z': 0.15 } },
+    { at: 0, set: { 'leftArmGroup.rotation.x': -0.3, 'leftForearmGroup.rotation.x': -0.2, 'hips.position.z': 0.3 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   cross: { duration: 500, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -0.2, 'rightForearmGroup.rotation.x': -0.1, 'hips.rotation.y': -0.4, 'hips.position.z': 0.2 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -0.2, 'rightForearmGroup.rotation.x': -0.1, 'hips.rotation.y': -0.4, 'hips.position.z': 0.35 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   hook: { duration: 550, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -0.8, 'rightArmGroup.rotation.z': -1.2, 'rightForearmGroup.rotation.x': -1.5, 'hips.rotation.y': -0.6 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -0.8, 'rightArmGroup.rotation.z': -1.2, 'rightForearmGroup.rotation.x': -1.5, 'hips.rotation.y': -0.6, 'hips.position.z': 0.25 } },
     { at: 0.45, hit: true },
     { at: 0.65, set: 'guard' }
   ]},
   uppercut: { duration: 600, phases: [
-    { at: 0, set: { 'hips.position.y': -0.1, 'rightArmGroup.rotation.x': 0.3 } },
-    { at: 0.3, set: { 'hips.position.y': 0.1, 'rightArmGroup.rotation.x': -1.8, 'rightForearmGroup.rotation.x': -0.5 } },
+    { at: 0, set: { 'hips.position.y': -0.1, 'hips.position.z': 0.2, 'rightArmGroup.rotation.x': 0.3 } },
+    { at: 0.3, set: { 'hips.position.y': 0.1, 'hips.position.z': 0.3, 'rightArmGroup.rotation.x': -1.8, 'rightForearmGroup.rotation.x': -0.5 } },
     { at: 0.5, hit: true },
     { at: 0.7, set: 'guard' }
   ]},
   body_shot: { duration: 450, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -0.3, 'rightArmGroup.rotation.z': -0.8, 'hips.rotation.y': -0.3, 'hips.position.y': -0.05 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -0.3, 'rightArmGroup.rotation.z': -0.8, 'hips.rotation.y': -0.3, 'hips.position.y': -0.05, 'hips.position.z': 0.3 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   low_kick: { duration: 600, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -0.8, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': -0.3 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -0.8, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': -0.3, 'hips.position.z': 0.2 } },
     { at: 0.4, hit: true },
     { at: 0.65, set: 'guard' }
   ]},
   high_kick: { duration: 800, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -2.0, 'rightCalfGroup.rotation.x': 0.8, 'hips.rotation.y': -0.5, 'hips.position.y': 0.05 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -2.0, 'rightCalfGroup.rotation.x': 0.8, 'hips.rotation.y': -0.5, 'hips.position.y': 0.05, 'hips.position.z': 0.25 } },
     { at: 0.4, hit: true },
     { at: 0.7, set: 'guard' }
   ]},
   body_kick: { duration: 650, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -1.3, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': -0.5 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -1.3, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': -0.5, 'hips.position.z': 0.25 } },
     { at: 0.4, hit: true },
     { at: 0.65, set: 'guard' }
   ]},
   knee: { duration: 500, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -1.5, 'rightCalfGroup.rotation.x': 1.5, 'hips.position.z': 0.2 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -1.5, 'rightCalfGroup.rotation.x': 1.5, 'hips.position.z': 0.35 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   elbow: { duration: 450, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -1.5, 'rightForearmGroup.rotation.x': -2.5, 'hips.rotation.y': -0.5, 'hips.position.z': 0.15 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -1.5, 'rightForearmGroup.rotation.x': -2.5, 'hips.rotation.y': -0.5, 'hips.position.z': 0.3 } },
     { at: 0.35, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   spinning_kick: { duration: 1000, phases: [
     { at: 0, set: { 'hips.rotation.y': 3.14 } },
-    { at: 0.3, set: { 'rightLegGroup.rotation.x': -2.0, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': 6.28 } },
+    { at: 0.3, set: { 'rightLegGroup.rotation.x': -2.0, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': 6.28, 'hips.position.z': 0.3 } },
     { at: 0.5, hit: true },
     { at: 0.75, set: 'guard' }
   ]},
@@ -184,8 +184,8 @@ class Arena3D {
     const isMobile = this.width < 600;
     this._createCrowd(isMobile ? 20 : 60);
 
-    this.fighterA = this._createFighter(0x4895ef, -1.5);
-    this.fighterB = this._createFighter(0xe63946,  1.5);
+    this.fighterA = this._createFighter(0x4895ef, -0.8);
+    this.fighterB = this._createFighter(0xe63946,  0.8);
     this.fighterB.group.rotation.y = Math.PI;
     this._applyGuard(this.fighterA);
     this._applyGuard(this.fighterB);
@@ -217,7 +217,7 @@ class Arena3D {
     this.scene.fog = new THREE.Fog(0x0a0a12, 15, 30);
 
     this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 0.1, 100);
-    this.camera.position.set(0, 4, 8);
+    this.camera.position.set(0, 3.5, 6);
     this.camera.lookAt(0, 1, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -596,21 +596,23 @@ class Arena3D {
   }
 
   flashDamage(fighter, intensity) {
-    const flashColor = new THREE.Color(1, 0, 0);
-    const saved = {};
-    for (const [name, part] of Object.entries(fighter.parts)) {
-      if (part && part.material) {
-        saved[name] = part.material.color.clone();
-        part.material.color.lerp(flashColor, intensity * 0.7);
-      }
+    // Cancel any pending restore to avoid stacking
+    if (fighter._flashTimeout) {
+      clearTimeout(fighter._flashTimeout);
+      fighter._flashTimeout = null;
     }
-    setTimeout(() => {
-      for (const [name, part] of Object.entries(fighter.parts)) {
-        if (part && part.material && saved[name]) {
-          part.material.color.copy(saved[name]);
-        }
-      }
-    }, 180);
+    // Apply flash using known original colors (mat = color, skinMat = 0x2a2a3e)
+    const flashColor = new THREE.Color(1, 0, 0);
+    const origColor = new THREE.Color(fighter.color);
+    const origSkin  = new THREE.Color(0x2a2a3e);
+    fighter.mat.color.copy(origColor).lerp(flashColor, intensity * 0.7);
+    fighter.skinMat.color.copy(origSkin).lerp(flashColor, intensity * 0.4);
+    // Restore to exact originals after 150ms
+    fighter._flashTimeout = setTimeout(() => {
+      fighter._flashTimeout = null;
+      fighter.mat.color.copy(origColor);
+      fighter.skinMat.color.copy(origSkin);
+    }, 150);
   }
 
   spawnHitParticles(worldPos, color, count) {
