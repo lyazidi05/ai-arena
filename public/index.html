@@ -1187,7 +1187,7 @@
           <div class="rec-item"><div class="rec-val" style="color:var(--purp)" id="pro-sub">0</div><div class="rec-lbl">Subs</div></div>
         </div>
         <div class="elo-box"><div class="elo-num" id="pro-elo">1000</div><div class="elo-lbl">ELO Rating</div></div>
-        <button class="pro-fav-btn" id="pro-fav-btn" onclick="toggleProfileFav()">
+        <button class="pro-fav-btn" id="pro-fav-btn" onclick="event.stopPropagation();toggleProfileFav()">
           <svg viewBox="0 0 24 24"><polygon class="star-outline" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/><polygon class="star-filled" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" style="display:none"/></svg>
           <span id="pro-fav-text">Add to Favorites</span>
         </button>
@@ -1368,7 +1368,7 @@ async function loadFighters() {
       ? ` onclick="event.stopPropagation();openArena(${st.fight_id})"` : '';
     const isFaved = myFavorites.has(String(f.id));
     return `<div class="fighter-card${isChamp ? ' champion' : ''} ${statusCls}" data-fighter-name="${f.name}" onclick="openProfile('${f.name}')">
-      <button class="fav-btn${isFaved ? ' faved' : ''}" data-fighter-id="${f.id}" onclick="toggleFav(${f.id},event)" title="${isFaved ? 'Remove favorite' : 'Add to favorites'}"><svg viewBox="0 0 24 24"><polygon class="star-outline" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/><polygon class="star-filled" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button>
+      <button class="fav-btn${isFaved ? ' faved' : ''}" data-fighter-id="${f.id}" title="${isFaved ? 'Remove favorite' : 'Add to favorites'}"><svg viewBox="0 0 24 24"><polygon class="star-outline" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/><polygon class="star-filled" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></button>
       <div class="fc-silhouette">
         <svg width="50" height="95" viewBox="0 0 100 200">
           <ellipse class="head" cx="50" cy="22" rx="14" ry="16" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
@@ -2825,8 +2825,19 @@ function updateFavBadge() {
 }
 
 const _favBusy = new Set();
-async function toggleFav(fighterId, event) {
-  if (event) { event.stopPropagation(); event.preventDefault(); }
+
+// Delegated click handler for all fav buttons — avoids inline onclick issues
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.fav-btn');
+  if (!btn) return;
+  e.stopPropagation();
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const fighterId = btn.dataset.fighterId;
+  if (fighterId) toggleFav(Number(fighterId));
+}, true); // useCapture = true to intercept before any inline onclick
+
+async function toggleFav(fighterId) {
   if (!currentHumanUser) { openAuthModal('signin'); return; }
   const id = String(fighterId);
   if (_favBusy.has(id)) return;
@@ -2872,7 +2883,7 @@ function updateProfileFavBtn() {
 
 function toggleProfileFav() {
   if (!currentProfileFighterId) return;
-  toggleFav(currentProfileFighterId, null);
+  toggleFav(currentProfileFighterId);
 }
 
 const STAR_SVG = `<svg viewBox="0 0 24 24"><polygon class="star-outline" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/><polygon class="star-filled" points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>`;
@@ -2897,7 +2908,7 @@ async function loadFavorites() {
       const st = f.status || {};
       const color = DISC_COLOR[f.discipline] || '#888';
       return `<div class="fighter-card" data-fav-id="${f.id}" data-fighter-name="${esc(f.name)}" onclick="openProfile('${esc(f.name)}')" style="cursor:pointer">
-        <button class="fav-btn faved" data-fighter-id="${f.id}" onclick="toggleFav(${f.id},event)" title="Remove favorite">${STAR_SVG}</button>
+        <button class="fav-btn faved" data-fighter-id="${f.id}" title="Remove favorite">${STAR_SVG}</button>
         <div class="fc-silhouette">
           <svg width="50" height="95" viewBox="0 0 100 200">
             <ellipse class="head" cx="50" cy="22" rx="14" ry="16" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
