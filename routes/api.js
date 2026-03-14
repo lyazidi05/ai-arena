@@ -1845,13 +1845,31 @@ router.get('/admin/fight/:id/full-replay', adminAuth, (req, res) => {
 // HUMAN SPECTATOR ACCOUNTS
 // ─────────────────────────────────────────
 
-// GET /admin/debug-users — list all human users (admin only)
-router.get('/admin/debug-users', adminAuth, (req, res) => {
-  const users = db.prepare('SELECT id, email, username, created_at, last_login_at, is_verified FROM human_users ORDER BY created_at DESC').all();
+// GET /admin/users — all human users (no password_hash)
+router.get('/admin/users', adminAuth, (req, res) => {
+  const users = db.prepare('SELECT id, username, email, created_at, last_login_at FROM human_users ORDER BY created_at DESC').all();
   res.json({ count: users.length, users });
 });
 
-// DELETE /admin/cleanup-users — remove unverified phantom accounts (admin only)
+// GET /admin/users/count — total registered users
+router.get('/admin/users/count', adminAuth, (req, res) => {
+  const { cnt } = db.prepare('SELECT COUNT(*) as cnt FROM human_users').get();
+  res.json({ count: cnt });
+});
+
+// GET /admin/newsletter — all newsletter subscribers
+router.get('/admin/newsletter', adminAuth, (req, res) => {
+  const subs = db.prepare('SELECT email, created_at FROM newsletter ORDER BY created_at DESC').all();
+  res.json({ count: subs.length, subscribers: subs });
+});
+
+// GET /admin/newsletter/count — total newsletter subscribers
+router.get('/admin/newsletter/count', adminAuth, (req, res) => {
+  const { cnt } = db.prepare('SELECT COUNT(*) as cnt FROM newsletter').get();
+  res.json({ count: cnt });
+});
+
+// DELETE /admin/cleanup-users — remove unverified phantom accounts
 router.delete('/admin/cleanup-users', adminAuth, (req, res) => {
   const phantoms = db.prepare('SELECT id, email, username FROM human_users WHERE is_verified = 0').all();
   if (phantoms.length > 0) {
