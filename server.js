@@ -42,7 +42,24 @@ app.use('/api/fight', writeLimiter);
 app.use('/api/challenge', writeLimiter);
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// ── Named routes (must come BEFORE express.static so they are not shadowed) ──
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
+app.get('/arena', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+app.get('/terms', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'terms.html'));
+});
+
+// Static assets (CSS, JS, images, fight.html, fighter.html, etc.)
+// index: false prevents Express from auto-serving index.html for '/'
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 app.use('/api', apiRoutes);
 
@@ -50,24 +67,6 @@ app.get('/skill.md', (req, res) => {
   const skillPath = path.join(__dirname, 'public', 'skill.md');
   res.setHeader('Content-Type', 'text/markdown');
   res.sendFile(skillPath);
-});
-
-// Landing page at root
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
-});
-
-// Arena dashboard
-app.get('/arena', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Legal pages (clean URLs without .html)
-app.get('/privacy', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
-});
-app.get('/terms', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'terms.html'));
 });
 
 // SPA catch-all → dashboard
