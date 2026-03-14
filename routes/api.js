@@ -1079,11 +1079,12 @@ function calcOdds(betFighterId, f1, f2) {
   return Math.round((1 + eloDiff / 200) * 100) / 100; // underdog bonus
 }
 
-// POST /fight/:id/bet
-router.post('/fight/:id/bet', (req, res) => {
-  const { fighter_name, amount, bettor_name } = req.body;
-  if (!fighter_name || !amount || !bettor_name) {
-    return res.status(400).json({ error: 'fighter_name, amount, bettor_name required' });
+// POST /fight/:id/bet — agents IA uniquement (x-api-key requis)
+router.post('/fight/:id/bet', auth, (req, res) => {
+  const { fighter_name, amount } = req.body;
+  const bettor_name = req.fighter.name; // identité forcée par l'API key
+  if (!fighter_name || !amount) {
+    return res.status(400).json({ error: 'fighter_name, amount required' });
   }
   if (!Number.isInteger(amount) || amount < 5 || amount > 50) {
     return res.status(400).json({ error: 'amount must be an integer between 5 and 50' });
@@ -1101,7 +1102,6 @@ router.post('/fight/:id/bet', (req, res) => {
     return res.status(400).json({ error: 'Fighter is not in this fight' });
   }
 
-  // Check existing bet from this bettor on this fight
   const existing = db.prepare('SELECT id FROM bets WHERE fight_id = ? AND bettor_name = ?').get(fight.id, bettor_name);
   if (existing) return res.status(409).json({ error: 'You already have a bet on this fight' });
 

@@ -534,7 +534,7 @@
       font-size: 0.78rem; font-weight: 700; letter-spacing: 2px; color: var(--gold);
       text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
     }
-    .bet-name-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .bet-name-row { display: none; }
     .bet-name-input {
       flex: 1; background: var(--surface2); border: 1px solid var(--border);
       color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 0.82rem;
@@ -545,15 +545,16 @@
       color: var(--muted); padding: 8px 6px; border-radius: 6px; cursor: pointer;
       font-size: 0.78rem; font-weight: 600; text-align: center; transition: all 0.15s;
     }
-    .bet-fighter-btn:hover, .bet-fighter-btn.selected { border-color: var(--gold); color: var(--gold); background: rgba(255,215,0,0.08); }
-    .bet-amount-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .bet-fighter-btn:hover { border-color: var(--border); }
+    .bet-amount-row { display: none; }
     .bet-chip {
       background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
       padding: 4px 10px; border-radius: 20px; cursor: pointer; font-size: 0.78rem; font-weight: 700;
       transition: all 0.15s;
     }
     .bet-chip:hover, .bet-chip.selected { border-color: var(--gold); color: var(--gold); }
-    .bet-submit-btn {
+    .bet-submit-btn { display: none; }
+    .bet-submit-btn-hidden {
       width: 100%; background: linear-gradient(135deg, #c8a800, #ffd700);
       border: none; color: #000; padding: 8px; border-radius: 6px;
       cursor: pointer; font-size: 0.85rem; font-weight: 900; letter-spacing: 1px;
@@ -919,26 +920,15 @@
       </div>
     </div>
 
-    <!-- Betting panel -->
+    <!-- Betting panel — read-only for humans, bets placed by AI agents only -->
     <div class="bet-panel" id="bet-panel" style="display:none">
-      <div class="bet-panel-title">🪙 Arena Coins — Place Your Bet</div>
-      <div class="bet-name-row">
-        <input class="bet-name-input" id="bet-name" maxlength="30" placeholder="Your name (for wallet)" />
-        <span id="bet-balance" style="font-size:0.8rem;color:var(--gold);white-space:nowrap;align-self:center"></span>
-      </div>
+      <div class="bet-panel-title">🪙 Arena Coins — Odds</div>
       <div class="bet-fighters-row">
-        <button class="bet-fighter-btn" id="bet-f1-btn" onclick="selectBetFighter(1)"></button>
-        <button class="bet-fighter-btn" id="bet-f2-btn" onclick="selectBetFighter(2)"></button>
+        <div class="bet-fighter-btn" id="bet-f1-btn" style="cursor:default"></div>
+        <div class="bet-fighter-btn" id="bet-f2-btn" style="cursor:default"></div>
       </div>
       <div class="bet-odds-row" id="bet-odds-lbl"></div>
-      <div class="bet-amount-row">
-        <span style="font-size:0.75rem;color:var(--muted)">Amount:</span>
-        <button class="bet-chip" onclick="selectBetAmount(5)">5</button>
-        <button class="bet-chip" onclick="selectBetAmount(10)">10</button>
-        <button class="bet-chip" onclick="selectBetAmount(25)">25</button>
-        <button class="bet-chip" onclick="selectBetAmount(50)">50</button>
-      </div>
-      <button class="bet-submit-btn" id="bet-submit-btn" onclick="submitBet()" disabled>Place Bet</button>
+      <div style="font-size:0.7rem;color:var(--muted);margin-bottom:6px;font-style:italic">Paris réservés aux agents IA (API key requise)</div>
       <div class="bet-history" id="bet-history"></div>
     </div>
 
@@ -1831,68 +1821,19 @@ let betSelectedFighter = null;  // 1 or 2
 let betSelectedAmount = null;
 let betFightData = null;
 
-function selectBetFighter(side) {
-  betSelectedFighter = side;
-  document.getElementById('bet-f1-btn').classList.toggle('selected', side === 1);
-  document.getElementById('bet-f2-btn').classList.toggle('selected', side === 2);
-  updateBetOdds();
-  updateBetSubmitState();
-}
-
-function selectBetAmount(amt) {
-  betSelectedAmount = amt;
-  document.querySelectorAll('.bet-chip').forEach(b => b.classList.toggle('selected', parseInt(b.textContent) === amt));
-  updateBetOdds();
-  updateBetSubmitState();
-}
-
-function updateBetOdds() {
-  if (!betFightData || !betSelectedFighter) { document.getElementById('bet-odds-lbl').textContent = ''; return; }
+function showBetOdds() {
+  if (!betFightData) return;
   const f1 = betFightData.fighter1;
   const f2 = betFightData.fighter2;
-  const betF = betSelectedFighter === 1 ? f1 : f2;
-  const oppF = betSelectedFighter === 1 ? f2 : f1;
-  const eloDiff = oppF.elo - betF.elo;
-  const odds = eloDiff <= 0 ? 1.5 : Math.round((1 + eloDiff / 200) * 100) / 100;
-  const potential = betSelectedAmount ? Math.round(betSelectedAmount * odds) : '—';
-  document.getElementById('bet-odds-lbl').textContent = `Odds: ×${odds}  |  Potential payout: ${potential} 🪙`;
-}
-
-function updateBetSubmitState() {
-  const ready = betSelectedFighter && betSelectedAmount && document.getElementById('bet-name')?.value.trim();
-  document.getElementById('bet-submit-btn').disabled = !ready;
-}
-
-async function loadBetterWallet() {
-  const name = document.getElementById('bet-name')?.value.trim();
-  if (!name) return;
-  const w = await fetch(`${API}/wallet/${encodeURIComponent(name)}`).then(r => r.json()).catch(() => null);
-  if (w) document.getElementById('bet-balance').textContent = `💰 ${w.balance} coins`;
-}
-
-async function submitBet() {
-  const name = document.getElementById('bet-name')?.value.trim();
-  if (!name || !betSelectedFighter || !betSelectedAmount || !currentArenaFightId) return;
-  const fighter = betSelectedFighter === 1 ? betFightData?.fighter1?.name : betFightData?.fighter2?.name;
-  const btn = document.getElementById('bet-submit-btn');
-  btn.disabled = true; btn.textContent = 'Placing…';
-
-  const res = await fetch(`${API}/fight/${currentArenaFightId}/bet`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fighter_name: fighter, amount: betSelectedAmount, bettor_name: name }),
-  }).then(r => r.json()).catch(() => null);
-
-  if (res?.placed) {
-    btn.textContent = `✓ Bet placed! (${res.potential_payout} 🪙 potential)`;
-    document.getElementById('bet-balance').textContent = `💰 ${res.new_balance} coins`;
-    // Hide panel after success
-    setTimeout(() => { document.getElementById('bet-panel').style.display = 'none'; }, 2000);
-  } else {
-    btn.textContent = res?.error || 'Error';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = 'Place Bet'; updateBetSubmitState(); }, 2500);
-  }
+  const calcOdds = (betF, oppF) => {
+    const diff = oppF.elo - betF.elo;
+    return diff <= 0 ? 1.5 : Math.round((1 + diff / 200) * 100) / 100;
+  };
+  const o1 = calcOdds(f1, f2);
+  const o2 = calcOdds(f2, f1);
+  document.getElementById('bet-f1-btn').textContent = `${f1.name}  ×${o1}`;
+  document.getElementById('bet-f2-btn').textContent = `${f2.name}  ×${o2}`;
+  document.getElementById('bet-odds-lbl').textContent = `Pool: ${betFightData.bet_pool ?? 0} 🪙`;
 }
 
 function renderBetHistory(bets) {
@@ -2087,17 +2028,11 @@ async function loadArenaFight(fightId, isRefresh = false) {
   const rivalBanner = document.getElementById('rivalry-banner');
   if (rivalBanner) rivalBanner.classList.toggle('show', !!data.is_rivalry);
 
-  // Betting panel — show only for active fights on first load
-  if (!isRefresh && data.status === 'active') {
+  // Betting panel — always visible for active fights, read-only
+  if (data.status === 'active') {
     betFightData = data;
-    const betPanel = document.getElementById('bet-panel');
-    betPanel.style.display = 'block';
-    document.getElementById('bet-f1-btn').textContent = `${f1.name} (${f1.elo} ELO)`;
-    document.getElementById('bet-f2-btn').textContent = `${f2.name} (${f2.elo} ELO)`;
-    document.getElementById('bet-name').addEventListener('input', updateBetSubmitState);
-    document.getElementById('bet-name').addEventListener('blur', loadBetterWallet);
-    const saved = getSpectatorName();
-    if (saved !== 'Spectator') document.getElementById('bet-name').value = saved;
+    document.getElementById('bet-panel').style.display = 'block';
+    showBetOdds();
   }
   if (data.status === 'finished') {
     document.getElementById('bet-panel').style.display = 'none';
