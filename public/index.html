@@ -752,7 +752,7 @@
     .user-dd-sep { border-top: 1px solid var(--border); }
     /* ── FAV BUTTON ── */
     .fav-btn { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); border: 1px solid var(--border); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; z-index: 2; line-height: 1; padding: 0; }
-    .fav-btn svg { width: 18px; height: 18px; }
+    .fav-btn svg { width: 18px; height: 18px; pointer-events: none; }
     .fav-btn .star-outline { fill: none; stroke: var(--muted); stroke-width: 2; transition: all 0.2s; }
     .fav-btn .star-filled { fill: #f4a534; stroke: #f4a534; stroke-width: 2; display: none; transition: all 0.2s; }
     .fav-btn:hover { border-color: #f4a534; transform: scale(1.1); }
@@ -766,7 +766,8 @@
     .pro-fav-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 12px; }
     .pro-fav-btn:hover { border-color: #f4a534; background: rgba(244,165,52,0.1); }
     .pro-fav-btn.faved { border-color: #f4a534; color: #f4a534; }
-    .pro-fav-btn svg { width: 18px; height: 18px; }
+    .pro-fav-btn svg { width: 18px; height: 18px; pointer-events: none; }
+    .pro-fav-btn span { pointer-events: none; }
     /* fav card fade out */
     .fighter-card.fav-removing { opacity: 0; transform: scale(0.95); transition: all 0.3s ease; }
     /* ── MY PANEL OVERLAY ── */
@@ -2823,31 +2824,35 @@ function updateFavBadge() {
   badge.style.display = count > 0 ? '' : 'none';
 }
 
+const _favBusy = new Set();
 async function toggleFav(fighterId, event) {
-  if (event) event.stopPropagation();
+  if (event) { event.stopPropagation(); event.preventDefault(); }
   if (!currentHumanUser) { openAuthModal('signin'); return; }
-  const token = getHumanToken();
   const id = String(fighterId);
+  if (_favBusy.has(id)) return;
+  _favBusy.add(id);
+  const token = getHumanToken();
   const isFav = myFavorites.has(id);
-  // Optimistic UI
   const btns = document.querySelectorAll(`.fav-btn[data-fighter-id="${fighterId}"]`);
-  if (isFav) {
-    myFavorites.delete(id);
-    btns.forEach(b => b.classList.remove('faved'));
-    updateFavBadge();
-    // Fade-out in favorites tab
-    const favCard = document.querySelector(`#favorites-list .fighter-card[data-fav-id="${fighterId}"]`);
-    if (favCard) { favCard.classList.add('fav-removing'); setTimeout(() => { favCard.remove(); if (!document.querySelector('#favorites-list .fighter-card')) { document.getElementById('favorites-list').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">You haven\'t added any favorites yet. Browse fighters and click the star to add them.</div>'; } }, 300); }
-    const r = await fetch(`/api/favorites/${fighterId}`, { method:'DELETE', headers:{ Authorization:'Bearer '+token } });
-    if (!r.ok) { myFavorites.add(id); btns.forEach(b => b.classList.add('faved')); updateFavBadge(); }
-  } else {
-    myFavorites.add(id);
-    btns.forEach(b => b.classList.add('faved'));
-    updateFavBadge();
-    const r = await fetch('/api/favorites/add', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({fighter_id:fighterId}) });
-    if (!r.ok) { myFavorites.delete(id); btns.forEach(b => b.classList.remove('faved')); updateFavBadge(); }
-  }
-  updateProfileFavBtn();
+  try {
+    if (isFav) {
+      myFavorites.delete(id);
+      btns.forEach(b => b.classList.remove('faved'));
+      updateFavBadge();
+      updateProfileFavBtn();
+      const favCard = document.querySelector(`#favorites-list .fighter-card[data-fav-id="${fighterId}"]`);
+      if (favCard) { favCard.classList.add('fav-removing'); setTimeout(() => { favCard.remove(); if (!document.querySelector('#favorites-list .fighter-card')) { document.getElementById('favorites-list').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">You haven\'t added any favorites yet. Browse fighters and click the star to add them.</div>'; } }, 300); }
+      const r = await fetch(`/api/favorites/${fighterId}`, { method:'DELETE', headers:{ Authorization:'Bearer '+token } });
+      if (!r.ok) { myFavorites.add(id); btns.forEach(b => b.classList.add('faved')); updateFavBadge(); updateProfileFavBtn(); }
+    } else {
+      myFavorites.add(id);
+      btns.forEach(b => b.classList.add('faved'));
+      updateFavBadge();
+      updateProfileFavBtn();
+      const r = await fetch('/api/favorites/add', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({fighter_id:fighterId}) });
+      if (!r.ok) { myFavorites.delete(id); btns.forEach(b => b.classList.remove('faved')); updateFavBadge(); updateProfileFavBtn(); }
+    }
+  } finally { _favBusy.delete(id); }
 }
 
 let currentProfileFighterId = null;
