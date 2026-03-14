@@ -1845,38 +1845,68 @@ router.get('/admin/fight/:id/full-replay', adminAuth, (req, res) => {
 // HUMAN SPECTATOR ACCOUNTS
 // ─────────────────────────────────────────
 
+// GET /admin/debug-users — list all human users (admin only)
+router.get('/admin/debug-users', adminAuth, (req, res) => {
+  const users = db.prepare('SELECT id, email, username, created_at, last_login_at, is_verified FROM human_users ORDER BY created_at DESC').all();
+  res.json({ count: users.length, users });
+});
+
+// DELETE /admin/cleanup-users — remove unverified phantom accounts (admin only)
+router.delete('/admin/cleanup-users', adminAuth, (req, res) => {
+  const phantoms = db.prepare('SELECT id, email, username FROM human_users WHERE is_verified = 0').all();
+  if (phantoms.length > 0) {
+    const ids = phantoms.map(u => u.id);
+    for (const id of ids) {
+      db.prepare('DELETE FROM human_favorites WHERE human_id = ?').run(id);
+      db.prepare('DELETE FROM human_agent_links WHERE human_id = ?').run(id);
+    }
+    db.prepare('DELETE FROM human_users WHERE is_verified = 0').run();
+  }
+  res.json({ deleted: phantoms.length, users: phantoms });
+});
+
 // POST /auth/register
 router.post('/auth/register', async (req, res) => {
-  const { email, username, password } = req.body;
-  if (!email || !username || !password) return res.status(400).json({ error: 'email, username, password required' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
-  if (username.length < 3 || username.length > 20) return res.status(400).json({ error: 'Username must be 3–20 characters' });
-  if (!/^[a-zA-Z0-9_-]+$/.test(username)) return res.status(400).json({ error: 'Username: letters, numbers, _ and - only' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  try {
+    const { email, username, password } = req.body;
+    if (!email || !username || !password) return res.status(400).json({ error: 'email, username, password required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
+    if (username.length < 3 || username.length > 20) return res.status(400).json({ error: 'Username must be 3–20 characters' });
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) return res.status(400).json({ error: 'Username: letters, numbers and _ only' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
-  const emailLower = email.trim().toLowerCase();
-  if (db.prepare('SELECT id FROM human_users WHERE email = ?').get(emailLower)) return res.status(409).json({ error: 'Email already registered' });
-  if (db.prepare('SELECT id FROM human_users WHERE username = ?').get(username)) return res.status(409).json({ error: 'Username already taken' });
+    const emailLower = email.trim().toLowerCase();
+    if (db.prepare('SELECT id FROM human_users WHERE email = ?').get(emailLower)) return res.status(409).json({ error: 'Email already registered' });
+    if (db.prepare('SELECT id FROM human_users WHERE username = ?').get(username)) return res.status(409).json({ error: 'Username already taken' });
 
-  const id = randomUUID();
-  const password_hash = await bcrypt.hash(password, 10);
-  db.prepare('INSERT INTO human_users (id, email, username, password_hash) VALUES (?, ?, ?, ?)').run(id, emailLower, username, password_hash);
+    const id = randomUUID();
+    const password_hash = await bcrypt.hash(password, 10);
+    db.prepare('INSERT INTO human_users (id, email, username, password_hash) VALUES (?, ?, ?, ?)').run(id, emailLower, username, password_hash);
 
-  const token = jwt.sign({ id, username, email: emailLower }, process.env.JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id, username, email: emailLower } });
+    const token = jwt.sign({ id, username, email: emailLower }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    res.status(201).json({ token, user: { id, username, email: emailLower } });
+  } catch (err) {
+    console.error('Register error:', err);
+    res.status(500).json({ error: 'Server error, please try again' });
+  }
 });
 
 // POST /auth/login
 router.post('/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-  const user = db.prepare('SELECT * FROM human_users WHERE email = ?').get(email.trim().toLowerCase());
-  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
-  const valid = await bcrypt.compare(password, user.password_hash);
-  if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
-  db.prepare("UPDATE human_users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
-  const token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+    const user = db.prepare('SELECT * FROM human_users WHERE email = ?').get(email.trim().toLowerCase());
+    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
+    db.prepare("UPDATE human_users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
+    const token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Server error, please try again' });
+  }
 });
 
 // GET /auth/me

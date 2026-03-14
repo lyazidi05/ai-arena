@@ -2702,8 +2702,18 @@ async function handleSignIn() {
   try {
     const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
     const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error || 'Login failed'; errEl.style.display = 'block'; }
-    else { localStorage.setItem('coa_human_token', d.token); currentHumanUser = d.user; renderAuthUI(currentHumanUser); closeAuthModal(); fetchMyFavoriteIds(); }
+    if (!r.ok) {
+      if (r.status === 401) errEl.textContent = 'Email ou mot de passe incorrect';
+      else if (r.status === 500) errEl.textContent = 'Erreur serveur, réessaie';
+      else errEl.textContent = d.error || 'Login failed';
+      errEl.style.display = 'block';
+    } else {
+      localStorage.setItem('coa_human_token', d.token);
+      currentHumanUser = d.user;
+      renderAuthUI(currentHumanUser);
+      closeAuthModal();
+      fetchMyFavoriteIds();
+    }
   } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
   btn.disabled = false; btn.textContent = 'Sign In';
 }
@@ -2724,8 +2734,18 @@ async function handleSignUp() {
   try {
     const r = await fetch('/api/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, email, password }) });
     const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error || 'Registration failed'; errEl.style.display = 'block'; }
-    else { localStorage.setItem('coa_human_token', d.token); currentHumanUser = d.user; renderAuthUI(currentHumanUser); closeAuthModal(); fetchMyFavoriteIds(); }
+    if (!r.ok) {
+      if (r.status === 409) errEl.textContent = d.error || 'Already taken';
+      else if (r.status === 500) errEl.textContent = 'Erreur serveur, réessaie';
+      else errEl.textContent = d.error || 'Registration failed';
+      errEl.style.display = 'block';
+    } else {
+      localStorage.setItem('coa_human_token', d.token);
+      currentHumanUser = d.user;
+      renderAuthUI(currentHumanUser);
+      closeAuthModal();
+      fetchMyFavoriteIds();
+    }
   } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
   btn.disabled = false; btn.textContent = 'Create Account';
 }
