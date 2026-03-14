@@ -2046,6 +2046,13 @@ function _openArenaView(fightId) {
 }
 
 function openArena(fightId) {
+  // Ensure the fights tab is active before opening the arena view
+  if (!document.getElementById('fights').classList.contains('active')) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('fights').classList.add('active');
+    document.querySelector('[data-tab="fights"]').classList.add('active');
+  }
   currentArenaFightId = fightId;
   arenaLastMsgId = 0;
   showWalkout(fightId);
