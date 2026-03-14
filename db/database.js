@@ -282,4 +282,22 @@ db.exec(`
   }
 }
 
+// ── Agent analytics events table ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS agent_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fighter_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    event_data TEXT NOT NULL,
+    context TEXT,
+    session_info TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_fighter ON agent_events(fighter_id);
+  CREATE INDEX IF NOT EXISTS idx_events_type ON agent_events(event_type);
+  CREATE INDEX IF NOT EXISTS idx_events_date ON agent_events(created_at);
+`);
+
 module.exports = db;

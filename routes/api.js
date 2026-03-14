@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
+const { trackEvent, addToDecisionChain, getRecentChain, deriveHitZone } = require('../engine/tracker');
 const {
   getWeightClass, calcBaseStats, generateApiKey,
   resolveAction, calcEloChange, canTrain, calcTrainingGain,
@@ -53,6 +54,20 @@ function getFighterStatus(fighter) {
   return { status: 'idle', detail: 'Repos', color: 'green' };
 }
 
+// Helper: optional auth (returns fighter or null, never fails)
+function softAuth(req) {
+  const key = req.headers['x-api-key'];
+  if (!key) return null;
+  try { return db.prepare('SELECT * FROM fighters WHERE api_key = ?').get(key) || null; } catch { return null; }
+}
+
+// Admin auth middleware
+function adminAuth(req, res, next) {
+  const key = req.headers['x-admin-key'];
+  if (!key || key !== process.env.ADMIN_KEY) return res.status(401).json({ error: 'Invalid admin key' });
+  next();
+}
+
 // Helper: award Arena Coins to a fighter wallet
 function awardCoins(fighterId, amount, description) {
   const wallet = db.prepare('SELECT balance FROM fighter_wallets WHERE fighter_id = ?').get(fighterId);
@@ -96,6 +111,22 @@ router.post('/register', (req, res) => {
   db.prepare('INSERT INTO fighter_wallets (fighter_id, balance) VALUES (?, 100)').run(newId);
   db.prepare('INSERT INTO transactions (fighter_id, type, amount, description, balance_after) VALUES (?, ?, ?, ?, ?)').run(newId, 'welcome_bonus', 100, 'Bonus de bienvenue', 100);
 
+  try {
+    trackEvent(req, newId, 'registration', {
+      name,
+      height_cm,
+      weight_kg,
+      discipline,
+      nickname: req.body.nickname || null,
+      fighting_stance: req.body.fighting_stance || null,
+      model: req.body.model || null,
+    }, {
+      calculated_stats: stats,
+      weight_class,
+      reach_cm: stats.reach,
+    });
+  } catch (e) {}
+
   res.json({
     message: `Welcome to Clash of Agents, ${name}!`,
     api_key,
@@ -116,6 +147,62 @@ router.get('/me', auth, (req, res) => {
 
   const fatigue = currentFatigue(f);
   const fatigued = applyFatigue({ ...f, fatigue });
+
+  try {
+    const pendingChallenges = db.prepare("SELECT COUNT(*) as cnt FROM challenges WHERE target_id = ? AND status = 'open'").get(f.id).cnt;
+    const activeCount = db.prepare("SELECT COUNT(*) as cnt FROM fights WHERE (fighter1_id = ? OR fighter2_id = ?) AND status = 'active'").get(f.id, f.id).cnt;
+    const walletRow = db.prepare('SELECT balance FROM fighter_wallets WHERE fighter_id = ?').get(f.id);
+    addToDecisionChain(f.id, 'heartbeat_me');
+    trackEvent(req, f.id, 'heartbeat', { endpoint: '/me' }, {
+      pending_challenges: pendingChallenges,
+      active_fights: activeCount,
+      can_train: canTrain(f),
+      fatigue,
+      balance: walletRow?.balance ?? 0,
+    });
+  } catch (e) {}
+
+  try {
+    const wallet = db.prepare('SELECT balance FROM fighter_wallets WHERE fighter_id = ?').get(f.id);
+    const boosts = db.prepare("SELECT item_name, remaining_uses FROM inventory WHERE fighter_id = ? AND is_active = 1 AND category = 'boost'").all(f.id);
+    const invCount = db.prepare("SELECT COUNT(*) as cnt FROM inventory WHERE fighter_id = ? AND is_active = 1").get(f.id).cnt;
+    const trainCount = db.prepare("SELECT COUNT(*) as cnt FROM training_log WHERE fighter_id = ?").get(f.id).cnt;
+    const rank = db.prepare("SELECT COUNT(*)+1 as rank FROM fighters WHERE weight_class = ? AND elo > ?").get(f.weight_class, f.elo).rank;
+    const rivals = db.prepare(`
+      SELECT r.*, fa.name as a_name, fb.name as b_name
+      FROM rivalries r
+      JOIN fighters fa ON r.fighter_a_id = fa.id
+      JOIN fighters fb ON r.fighter_b_id = fb.id
+      WHERE (r.fighter_a_id = ? OR r.fighter_b_id = ?) AND r.is_rivalry = 1
+    `).all(f.id, f.id).map(r => {
+      const isA = r.fighter_a_id === f.id;
+      return { name: isA ? r.b_name : r.a_name, total_fights: r.total_fights, my_wins: isA ? r.fighter_a_wins : r.fighter_b_wins, their_wins: isA ? r.fighter_b_wins : r.fighter_a_wins };
+    });
+    const nowSec = Math.floor(Date.now() / 1000);
+    const since24h = nowSec - 86400;
+    const fights24h = db.prepare("SELECT COUNT(*) as cnt FROM fights WHERE (fighter1_id = ? OR fighter2_id = ?) AND status = 'finished' AND created_at > ?").get(f.id, f.id, since24h).cnt;
+    const train24h = db.prepare("SELECT COUNT(*) as cnt FROM training_log WHERE fighter_id = ? AND created_at > ?").get(f.id, since24h).cnt;
+    const purchases24h = db.prepare("SELECT COUNT(*) as cnt FROM transactions WHERE fighter_id = ? AND type = 'purchase' AND created_at > datetime('now', '-24 hours')").get(f.id).cnt;
+    trackEvent(req, f.id, 'full_state_snapshot', {
+      stats: { power: f.power, speed: f.speed, agility: f.agility, striking: f.striking, grappling: f.grappling, endurance: f.endurance },
+      record: { wins: f.wins, losses: f.losses, draws: f.draws, ko_wins: f.ko_wins, sub_wins: f.submission_wins },
+      elo: f.elo,
+      fatigue,
+      balance: wallet?.balance ?? 0,
+      active_boosts: boosts.map(b => ({ item: b.item_name, remaining_uses: b.remaining_uses })),
+      inventory_count: invCount,
+      total_training_sessions: trainCount,
+      rank_in_weight_class: rank,
+      is_champion: rank === 1,
+      rivals,
+    }, {
+      time_since_registration_hours: Math.round((nowSec - (f.created_at || 0)) / 3600),
+      fights_last_24h: fights24h,
+      training_last_24h: train24h,
+      purchases_last_24h: purchases24h,
+    });
+  } catch (e) {}
+
   res.json({
     id: f.id,
     name: f.name,
@@ -156,6 +243,51 @@ router.post('/train', auth, (req, res) => {
     .run(req.fighter.id, stat, gain);
 
   const updated = db.prepare('SELECT * FROM fighters WHERE id = ?').get(req.fighter.id);
+
+  try {
+    const f = req.fighter;
+    const totalSessions = db.prepare('SELECT COUNT(*) as cnt FROM training_log WHERE fighter_id = ?').get(f.id).cnt;
+    const timeSinceLastTrain = f.last_trained_at > 0 ? Math.round((Date.now()/1000 - f.last_trained_at) / 60) : null;
+    const wallet = db.prepare('SELECT balance FROM fighter_wallets WHERE fighter_id = ?').get(f.id);
+    const allStats = { power: updated.power, speed: updated.speed, agility: updated.agility, striking: updated.striking, grappling: updated.grappling, endurance: updated.endurance };
+    trackEvent(req, f.id, 'training', {
+      stat_trained: stat,
+      points_gained: gain,
+      new_value: updated[stat],
+      previous_value: f[stat],
+    }, {
+      all_current_stats: allStats,
+      fatigue: newFatigue,
+      total_sessions: totalSessions + 1,
+      time_since_last_train_minutes: timeSinceLastTrain,
+      balance: wallet?.balance ?? 0,
+    });
+
+    // post_loss_training / post_win_training
+    const lastFight = db.prepare(`
+      SELECT fi.winner_id, fi.end_method, fi.id as fight_id, fi.last_action_at,
+        op.name as opponent_name, op.discipline as opp_discipline
+      FROM fights fi
+      JOIN fighters op ON (CASE WHEN fi.fighter1_id = ? THEN fi.fighter2_id ELSE fi.fighter1_id END) = op.id
+      WHERE (fi.fighter1_id = ? OR fi.fighter2_id = ?) AND fi.status = 'finished'
+      ORDER BY fi.id DESC LIMIT 1
+    `).get(f.id, f.id, f.id);
+    if (lastFight) {
+      const isLoss = lastFight.winner_id !== f.id;
+      const timeSinceFight = lastFight.last_action_at ? Math.round((Date.now()/1000 - lastFight.last_action_at) / 60) : null;
+      const eventType = isLoss ? 'post_loss_training' : 'post_win_training';
+      trackEvent(req, f.id, eventType, {
+        stat_trained: stat,
+        [isLoss ? 'loss_method' : 'win_method']: lastFight.end_method,
+        [isLoss ? 'lost_to_discipline' : 'beat_discipline']: lastFight.opp_discipline,
+        time_since_fight_minutes: timeSinceFight,
+      }, {
+        [isLoss ? 'lost_to_name' : 'beat_name']: lastFight.opponent_name,
+        fight_id: lastFight.fight_id,
+      });
+    }
+  } catch (e) {}
+
   res.json({
     message: `Training complete! ${stat} increased by ${gain}`,
     stat,
@@ -171,6 +303,19 @@ router.get('/leaderboard', (req, res) => {
   const fighters = db.prepare(`
     SELECT * FROM fighters ORDER BY elo DESC LIMIT 50
   `).all();
+
+  try {
+    const viewer = softAuth(req);
+    if (viewer) {
+      const myRank = db.prepare('SELECT COUNT(*)+1 as rank FROM fighters WHERE elo > ?').get(viewer.elo).rank;
+      addToDecisionChain(viewer.id, 'viewed_leaderboard');
+      trackEvent(req, viewer.id, 'leaderboard_view', {
+        weight_class_filter: req.query.weight_class || null,
+        limit: parseInt(req.query.limit) || 50,
+      }, { own_rank: myRank, own_elo: viewer.elo });
+    }
+  } catch (e) {}
+
   const leaderboard = fighters.map(f => ({
     name: f.name,
     discipline: f.discipline,
@@ -215,6 +360,36 @@ router.post('/challenge', auth, (req, res) => {
   const result = db.prepare('INSERT INTO challenges (challenger_id, target_id) VALUES (?, ?)')
     .run(req.fighter.id, target_id);
 
+  try {
+    const f = req.fighter;
+    const targetFull = target_id ? db.prepare('SELECT * FROM fighters WHERE id = ?').get(target_id) : null;
+    const [rA, rB] = target_id ? [Math.min(f.id, target_id), Math.max(f.id, target_id)] : [0, 0];
+    const rivalry = target_id ? db.prepare('SELECT is_rivalry FROM rivalries WHERE fighter_a_id = ? AND fighter_b_id = ?').get(rA, rB) : null;
+    const boosts = db.prepare("SELECT item_name FROM inventory WHERE fighter_id = ? AND is_active = 1 AND category = 'boost'").all(f.id).map(b => b.item_name);
+    addToDecisionChain(f.id, 'sent_challenge', target_name || null);
+    trackEvent(req, f.id, 'challenge_sent', {
+      target_id: target_id || null,
+      target_name: target_name || null,
+      challenge_type: target_name ? 'targeted' : 'open',
+      target_elo: targetFull?.elo ?? null,
+      target_discipline: targetFull?.discipline ?? null,
+      target_record: targetFull ? `${targetFull.wins}-${targetFull.losses}` : null,
+    }, {
+      own_elo: f.elo,
+      own_record: `${f.wins}-${f.losses}`,
+      own_fatigue: currentFatigue(f),
+      is_rivalry: rivalry?.is_rivalry === 1,
+      elo_difference: targetFull ? targetFull.elo - f.elo : null,
+      own_active_boosts: boosts,
+    });
+    // Log decision chain
+    const chain = getRecentChain(f.id, 5);
+    if (chain.length > 1) {
+      const dur = chain.length > 1 ? (new Date(chain[chain.length-1].timestamp) - new Date(chain[0].timestamp)) / 1000 : 0;
+      trackEvent(req, f.id, 'decision_chain', { chain: chain.map(e => ({ action: e.action, target: e.target, timestamp: e.timestamp })) }, { chain_duration_seconds: dur, total_actions_in_chain: chain.length });
+    }
+  } catch (e) {}
+
   res.json({
     challenge_id: result.lastInsertRowid,
     message: target_name ? `Challenge sent to ${target_name}` : 'Open challenge posted to the arena!',
@@ -251,8 +426,34 @@ router.post('/challenge/:id/accept', auth, (req, res) => {
   db.prepare('UPDATE challenges SET status = ?, fight_id = ? WHERE id = ?')
     .run('accepted', fightResult.lastInsertRowid, challenge.id);
 
+  const fightId = fightResult.lastInsertRowid;
+  try {
+    const [rA, rB] = [Math.min(f1.id, f2.id), Math.max(f1.id, f2.id)];
+    const rivalry = db.prepare('SELECT is_rivalry FROM rivalries WHERE fighter_a_id = ? AND fighter_b_id = ?').get(rA, rB);
+    const f2Boosts = db.prepare("SELECT item_name FROM inventory WHERE fighter_id = ? AND is_active = 1 AND category = 'boost'").all(f2.id).map(b => b.item_name);
+    addToDecisionChain(f2.id, 'accepted_challenge', f1.name);
+    trackEvent(req, f2.id, 'challenge_accepted', {
+      challenge_id: challenge.id,
+      opponent_name: f1.name,
+      opponent_elo: f1.elo,
+      opponent_discipline: f1.discipline,
+      fight_id: fightId,
+    }, {
+      own_elo: f2.elo,
+      own_fatigue: f2Fatigue,
+      own_stats: { power: f2.power, speed: f2.speed, agility: f2.agility, striking: f2.striking, grappling: f2.grappling, endurance: f2.endurance },
+      own_active_boosts: f2Boosts,
+      is_rivalry: rivalry?.is_rivalry === 1,
+    });
+    const chain = getRecentChain(f2.id, 5);
+    if (chain.length > 1) {
+      const dur = (new Date(chain[chain.length-1].timestamp) - new Date(chain[0].timestamp)) / 1000;
+      trackEvent(req, f2.id, 'decision_chain', { chain: chain.map(e => ({ action: e.action, target: e.target, timestamp: e.timestamp })) }, { chain_duration_seconds: dur, total_actions_in_chain: chain.length });
+    }
+  } catch (e) {}
+
   res.json({
-    fight_id: fightResult.lastInsertRowid,
+    fight_id: fightId,
     message: `Fight started: ${f1.name} vs ${f2.name}!`,
     fighter1: f1.name,
     fighter2: f2.name,
@@ -270,6 +471,25 @@ router.get('/fighters/:name', (req, res) => {
   const f = db.prepare('SELECT * FROM fighters WHERE name = ?').get(req.params.name);
   if (!f) return res.status(404).json({ error: 'Fighter not found' });
   const fatigue = currentFatigue(f);
+
+  try {
+    const viewer = softAuth(req);
+    if (viewer && viewer.id !== f.id) {
+      const [rA, rB] = [Math.min(viewer.id, f.id), Math.max(viewer.id, f.id)];
+      const rivalry = db.prepare('SELECT is_rivalry FROM rivalries WHERE fighter_a_id = ? AND fighter_b_id = ?').get(rA, rB);
+      addToDecisionChain(viewer.id, 'viewed_profile', f.name);
+      trackEvent(req, viewer.id, 'profile_viewed', {
+        viewed_fighter_id: f.id,
+        viewed_fighter_name: f.name,
+      }, {
+        own_elo: viewer.elo,
+        viewed_elo: f.elo,
+        is_same_weight_class: viewer.weight_class === f.weight_class,
+        is_rival: rivalry?.is_rivalry === 1,
+      });
+    }
+  } catch (e) {}
+
   res.json({
     id: f.id, name: f.name, discipline: f.discipline, weight_class: f.weight_class,
     height_cm: f.height_cm, weight_kg: f.weight_kg, reach: f.reach, elo: f.elo,
@@ -651,6 +871,70 @@ router.post('/fight/:id/action', auth, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(fight.id, fight.current_round, actionCount + 1, attacker.id, move, result.damage, result.isCritical ? 1 : 0, resultText);
 
+  // Track fight_action (attacker perspective)
+  try {
+    const oppLastMovesCol = isF1 ? 'last_moves_f2' : 'last_moves_f1';
+    const oppMoves = fight[oppLastMovesCol] ? fight[oppLastMovesCol].split(',').slice(-3) : [];
+    const atkBoosts = db.prepare("SELECT item_name FROM inventory WHERE fighter_id = ? AND is_active = 1 AND category = 'boost'").all(attacker.id).map(b => b.item_name);
+    trackEvent(req, attacker.id, 'fight_action', {
+      fight_id: fight.id,
+      round: fight.current_round,
+      move_chosen: move,
+      move_type: moveData.type,
+      damage_dealt: result.damage,
+      was_blocked: result.blocked || false,
+      was_dodged: result.dodged || false,
+      was_critical: result.isCritical || false,
+      is_combo: !!comboHit,
+      combo_name: comboHit?.name || null,
+      combo_bonus: comboHit?.bonus || null,
+    }, {
+      own_hp: attackerHp,
+      own_stamina: attackerStamina,
+      own_fatigue: currentFatigue(attacker),
+      opponent_hp: defenderHp,
+      opponent_stamina: defenderStamina,
+      opponent_name: defender.name,
+      opponent_discipline: defender.discipline,
+      round: fight.current_round,
+      is_losing: attackerHp < defenderHp,
+      hp_difference: attackerHp - defenderHp,
+      own_active_boosts: atkBoosts,
+      previous_3_moves_own: lastMoves.slice(0, -1),
+      previous_3_moves_opponent: oppMoves,
+      time_since_last_action_seconds: Math.round(timeSinceLastAction),
+    });
+  } catch (e) {}
+
+  // Track fight_damage_received (defender perspective)
+  if (result.damage > 0 && !result.blocked) {
+    try {
+      const cumFight = db.prepare('SELECT COALESCE(SUM(damage_dealt),0) as total FROM fight_actions WHERE fight_id = ? AND fighter_id = ?').get(fight.id, attacker.id).total;
+      const cumRound = db.prepare('SELECT COALESCE(SUM(damage_dealt),0) as total FROM fight_actions WHERE fight_id = ? AND fighter_id = ? AND round = ?').get(fight.id, attacker.id, fight.current_round).total;
+      trackEvent(req, defender.id, 'fight_damage_received', {
+        fight_id: fight.id,
+        round: fight.current_round,
+        move_received: move,
+        move_type: moveData.type,
+        damage_taken: result.damage,
+        was_blocked_by_me: result.blocked || false,
+        was_dodged_by_me: result.dodged || false,
+        attacker_name: attacker.name,
+        attacker_discipline: attacker.discipline,
+        hit_zone: deriveHitZone(move),
+      }, {
+        own_hp_before: defenderHp,
+        own_hp_after: newDefenderHp,
+        own_stamina: defenderStamina,
+        attacker_hp: attackerHp,
+        attacker_stamina: attackerStamina,
+        round: fight.current_round,
+        cumulative_damage_this_fight: cumFight,
+        cumulative_damage_this_round: cumRound,
+      });
+    } catch (e) {}
+  }
+
   // Check KO/Submission
   let fightOver = false;
   let endMethod = null;
@@ -768,6 +1052,106 @@ router.post('/fight/:id/action', auth, (req, res) => {
     const winnerName = db.prepare('SELECT name FROM fighters WHERE id = ?').get(winnerId).name;
     const rivalryRow = db.prepare('SELECT * FROM rivalries WHERE fighter_a_id = ? AND fighter_b_id = ?').get(rivalA, rivalB);
     const isRivalry = rivalryRow?.is_rivalry === 1;
+
+    // Track fight_end for winner
+    try {
+      const allFightActions = db.prepare('SELECT * FROM fight_actions WHERE fight_id = ? ORDER BY id ASC').all(fight.id);
+      const totalMoves = allFightActions.length;
+      const winnerMoves = allFightActions.filter(a => a.fighter_id === winnerId);
+      const loserMoves  = allFightActions.filter(a => a.fighter_id === loserId);
+      const winnerDmgDealt = winnerMoves.reduce((s, a) => s + (a.damage_dealt || 0), 0);
+      const loserDmgDealt  = loserMoves.reduce((s, a) => s + (a.damage_dealt || 0), 0);
+      const combosWinner = winnerMoves.filter(a => a.result_text && a.result_text.includes('COMBO')).length;
+      const isTournamentFight = !!db.prepare('SELECT id FROM tournament_matches WHERE fight_id = ?').get(fight.id);
+      const isTitleFight = fight.is_title_fight === 1;
+      const coinReward = endMethod === 'ko' || endMethod === 'tko' ? 70 : endMethod === 'submission' ? 65 : 50;
+
+      trackEvent(req, winnerId, 'fight_end', {
+        fight_id: fight.id,
+        result: 'win',
+        method: endMethod,
+        rounds_lasted: fight.current_round,
+        total_damage_dealt: Math.round(winnerDmgDealt),
+        total_damage_received: Math.round(loserDmgDealt),
+        total_moves: winnerMoves.length,
+        combos_landed: combosWinner,
+        coins_earned: coinReward,
+        elo_change: elo.winnerGain,
+      }, {
+        final_hp: endMethod === 'decision' ? (isF1 ? newF1Hp : newF2Hp) : (winnerId === fight.fighter1_id ? newF1Hp : newF2Hp),
+        final_stamina: winnerId === fight.fighter1_id ? newF1Stamina : newF2Stamina,
+        opponent_name: loser.name,
+        opponent_discipline: loser.discipline,
+        opponent_elo: loser.elo,
+        was_favorite: winner.elo >= loser.elo,
+        elo_before: winner.elo,
+        elo_after: winner.elo + elo.winnerGain,
+        is_rivalry: isRivalry,
+        is_title_fight: isTitleFight,
+        is_tournament: isTournamentFight,
+      });
+
+      trackEvent(req, loserId, 'fight_end', {
+        fight_id: fight.id,
+        result: 'loss',
+        method: endMethod,
+        rounds_lasted: fight.current_round,
+        total_damage_dealt: Math.round(loserDmgDealt),
+        total_damage_received: Math.round(winnerDmgDealt),
+        total_moves: loserMoves.length,
+        combos_landed: loserMoves.filter(a => a.result_text && a.result_text.includes('COMBO')).length,
+        coins_earned: 0,
+        elo_change: -elo.loserLoss,
+      }, {
+        final_hp: loserId === fight.fighter1_id ? newF1Hp : newF2Hp,
+        final_stamina: loserId === fight.fighter1_id ? newF1Stamina : newF2Stamina,
+        opponent_name: winner.name,
+        opponent_discipline: winner.discipline,
+        opponent_elo: winner.elo,
+        was_favorite: loser.elo > winner.elo,
+        elo_before: loser.elo,
+        elo_after: loser.elo - elo.loserLoss,
+        is_rivalry: isRivalry,
+        is_title_fight: isTitleFight,
+        is_tournament: isTournamentFight,
+      });
+
+      // fight_full_sequence: reconstruct turn-by-turn HP
+      const f1Full = db.prepare('SELECT * FROM fighters WHERE id = ?').get(fight.fighter1_id);
+      const f2Full = db.prepare('SELECT * FROM fighters WHERE id = ?').get(fight.fighter2_id);
+      const f1Boosts = db.prepare("SELECT item_name FROM inventory WHERE fighter_id = ? AND is_active = 1").all(fight.fighter1_id).map(b => b.item_name);
+      const f2Boosts = db.prepare("SELECT item_name FROM inventory WHERE fighter_id = ? AND is_active = 1").all(fight.fighter2_id).map(b => b.item_name);
+      let hp1 = 100, hp2 = 100;
+      const sequence = allFightActions.map((a, idx) => {
+        const isAttackerF1 = a.fighter_id === fight.fighter1_id;
+        const dmg = a.damage_dealt || 0;
+        if (isAttackerF1) hp2 = Math.max(0, hp2 - dmg);
+        else hp1 = Math.max(0, hp1 - dmg);
+        return {
+          turn: idx + 1, round: a.round,
+          attacker: isAttackerF1 ? 'fighter_a' : 'fighter_b',
+          move: a.action, damage: dmg,
+          critical: a.is_critical === 1,
+          combo: a.result_text && a.result_text.includes('COMBO') ? true : null,
+          fighter_a_hp: isAttackerF1 ? hp1 : hp1,
+          fighter_b_hp: isAttackerF1 ? hp2 : hp2,
+        };
+      });
+
+      trackEvent(req, winnerId, 'fight_full_sequence', {
+        fight_id: fight.id,
+        fighter_a: { id: f1Full.id, name: f1Full.name, discipline: f1Full.discipline, elo_before: f1Full.elo, active_boosts: f1Boosts },
+        fighter_b: { id: f2Full.id, name: f2Full.name, discipline: f2Full.discipline, elo_before: f2Full.elo, active_boosts: f2Boosts },
+        sequence,
+        result: { winner_id: winnerId, method: endMethod, rounds_lasted: fight.current_round, total_turns: totalMoves },
+        elo_after: { fighter_a: f1Full.elo + (winnerId === f1Full.id ? elo.winnerGain : -elo.loserLoss), fighter_b: f2Full.elo + (winnerId === f2Full.id ? elo.winnerGain : -elo.loserLoss) },
+      }, {
+        is_rivalry: isRivalry,
+        is_title: isTitleFight,
+        is_tournament: isTournamentFight,
+        weight_class: f1Full.weight_class,
+      });
+    } catch (e) {}
 
     return res.json({
       fight_over: true,
@@ -1025,6 +1409,20 @@ router.post('/tournaments/:id/join', auth, (req, res) => {
   db.prepare('INSERT INTO tournament_entries (tournament_id, fighter_id, seed) VALUES (?, ?, ?)').run(t.id, f.id, entryCount + 1);
   const newCount = entryCount + 1;
 
+  try {
+    const wallet = db.prepare('SELECT balance FROM fighter_wallets WHERE fighter_id = ?').get(f.id);
+    trackEvent(req, f.id, 'tournament_join', {
+      tournament_id: t.id,
+      weight_class: t.weight_class,
+      bracket_size: t.bracket_size,
+    }, {
+      own_elo: f.elo,
+      own_record: `${f.wins}-${f.losses}`,
+      own_fatigue: currentFatigue(f),
+      own_balance: wallet?.balance ?? 0,
+    });
+  } catch (e) {}
+
   // Auto-start when bracket is full
   if (newCount >= t.bracket_size) {
     const entries = db.prepare('SELECT * FROM tournament_entries WHERE tournament_id = ?').all(t.id);
@@ -1119,6 +1517,28 @@ router.post('/fight/:id/bet', auth, (req, res) => {
     .run(fight.id, bettor_name, betFighter.id, amount, odds);
 
   const newBalance = wallet.balance - amount;
+
+  try {
+    addToDecisionChain(req.fighter.id, 'placed_bet', fighter_name);
+    trackEvent(req, req.fighter.id, 'bet_placed', {
+      fight_id: fight.id,
+      bet_on_fighter_id: betFighter.id,
+      bet_on_fighter_name: fighter_name,
+      amount,
+      odds,
+    }, {
+      own_balance: wallet.balance,
+      fighter_a_elo: f1.elo,
+      fighter_b_elo: f2.elo,
+      bet_on_self: betFighter.id === req.fighter.id,
+    });
+    const chain = getRecentChain(req.fighter.id, 5);
+    if (chain.length > 1) {
+      const dur = (new Date(chain[chain.length-1].timestamp) - new Date(chain[0].timestamp)) / 1000;
+      trackEvent(req, req.fighter.id, 'decision_chain', { chain: chain.map(e => ({ action: e.action, target: e.target, timestamp: e.timestamp })) }, { chain_duration_seconds: dur, total_actions_in_chain: chain.length });
+    }
+  } catch (e) {}
+
   res.json({ placed: true, bettor: bettor_name, on: fighter_name, amount, odds, potential_payout: Math.round(amount * odds), new_balance: newBalance });
 });
 
@@ -1156,6 +1576,20 @@ router.get('/leaderboard/bettors', (req, res) => {
 
 // GET /marketplace — catalogue complet
 router.get('/marketplace', (req, res) => {
+  try {
+    const viewer = softAuth(req);
+    if (viewer) {
+      const wallet = db.prepare('SELECT balance FROM fighter_wallets WHERE fighter_id = ?').get(viewer.id);
+      const boostsCount = db.prepare("SELECT COUNT(*) as cnt FROM inventory WHERE fighter_id = ? AND is_active = 1 AND category = 'boost'").get(viewer.id).cnt;
+      addToDecisionChain(viewer.id, 'browsed_marketplace');
+      trackEvent(req, viewer.id, 'marketplace_browsed', {}, {
+        own_balance: wallet?.balance ?? 0,
+        own_fatigue: currentFatigue(viewer),
+        own_active_boosts_count: boostsCount,
+      });
+    }
+  } catch (e) {}
+
   const categories = {};
   for (const item of Object.values(MARKETPLACE)) {
     if (!categories[item.category]) categories[item.category] = [];
@@ -1223,6 +1657,31 @@ router.post('/marketplace/buy', auth, (req, res) => {
     db.prepare('INSERT INTO inventory (fighter_id, item_id, item_name, category, remaining_uses, effect_value) VALUES (?, ?, ?, ?, ?, ?)').run(req.fighter.id, item.id, item.name, item.category, -1, JSON.stringify(item.effect));
   }
 
+  try {
+    const f = req.fighter;
+    const upcomingFight = db.prepare("SELECT id FROM fights WHERE (fighter1_id = ? OR fighter2_id = ?) AND status = 'active'").get(f.id, f.id);
+    const purchases24h = db.prepare("SELECT COUNT(*) as cnt FROM transactions WHERE fighter_id = ? AND type = 'purchase' AND created_at > datetime('now', '-24 hours')").get(f.id).cnt;
+    addToDecisionChain(f.id, 'bought_item', item.id);
+    trackEvent(req, f.id, 'marketplace_purchase', {
+      item_id: item.id,
+      item_name: item.name,
+      item_category: item.category,
+      price: item.price,
+    }, {
+      balance_before: wallet.balance,
+      balance_after: newBalance,
+      has_upcoming_fight: !!upcomingFight,
+      current_fatigue: currentFatigue(fighter),
+      current_stats: { power: fighter.power, speed: fighter.speed, agility: fighter.agility, striking: fighter.striking, grappling: fighter.grappling, endurance: fighter.endurance },
+      previous_purchases_24h: purchases24h,
+    });
+    const chain = getRecentChain(f.id, 5);
+    if (chain.length > 1) {
+      const dur = (new Date(chain[chain.length-1].timestamp) - new Date(chain[0].timestamp)) / 1000;
+      trackEvent(req, f.id, 'decision_chain', { chain: chain.map(e => ({ action: e.action, target: e.target, timestamp: e.timestamp })) }, { chain_duration_seconds: dur, total_actions_in_chain: chain.length });
+    }
+  } catch (e) {}
+
   res.json({ success: true, item: item.name, new_balance: newBalance });
 });
 
@@ -1238,6 +1697,20 @@ router.post('/inventory/activate', auth, (req, res) => {
   if (!inventory_id) return res.status(400).json({ error: 'inventory_id required' });
   const item = db.prepare('SELECT * FROM inventory WHERE id = ? AND fighter_id = ? AND is_active = 1').get(inventory_id, req.fighter.id);
   if (!item) return res.status(404).json({ error: 'Item non trouvé dans votre inventaire' });
+
+  try {
+    const upcoming = db.prepare("SELECT fi.id, op.name as opp_name, op.discipline as opp_disc, op.elo as opp_elo FROM fights fi JOIN fighters op ON (CASE WHEN fi.fighter1_id = ? THEN fi.fighter2_id ELSE fi.fighter1_id END) = op.id WHERE (fi.fighter1_id = ? OR fi.fighter2_id = ?) AND fi.status = 'active' LIMIT 1").get(req.fighter.id, req.fighter.id, req.fighter.id);
+    trackEvent(req, req.fighter.id, 'boost_activated', {
+      item_id: item.item_id,
+      item_name: item.item_name,
+      effect: item.effect_value,
+    }, {
+      upcoming_opponent_name: upcoming?.opp_name || null,
+      upcoming_opponent_discipline: upcoming?.opp_disc || null,
+      upcoming_opponent_elo: upcoming?.opp_elo || null,
+    });
+  } catch (e) {}
+
   res.json({ activated: true, item: item.item_name });
 });
 
@@ -1251,6 +1724,105 @@ router.get('/marketplace/feed', (req, res) => {
     ORDER BY t.id DESC LIMIT 20
   `).all();
   res.json({ feed });
+});
+
+// ─────────────────────────────────────────
+// ADMIN ANALYTICS ENDPOINTS
+// All require header: x-admin-key
+// ─────────────────────────────────────────
+
+function csvEscape(val) {
+  if (val === null || val === undefined) return '';
+  const s = String(val).replace(/"/g, '""');
+  return `"${s}"`;
+}
+
+// GET /admin/events?fighter_id=&type=&from=&to=&limit=&offset=
+router.get('/admin/events', adminAuth, (req, res) => {
+  const { fighter_id, type, from, to, limit = 1000, offset = 0 } = req.query;
+  let sql = 'SELECT * FROM agent_events WHERE 1=1';
+  const params = [];
+  if (fighter_id) { sql += ' AND fighter_id = ?'; params.push(fighter_id); }
+  if (type)       { sql += ' AND event_type = ?';  params.push(type); }
+  if (from)       { sql += ' AND created_at >= ?'; params.push(from); }
+  if (to)         { sql += ' AND created_at <= ?'; params.push(to); }
+  sql += ' ORDER BY id ASC LIMIT ? OFFSET ?';
+  params.push(parseInt(limit), parseInt(offset));
+  const rows = db.prepare(sql).all(...params);
+  res.json({ events: rows, count: rows.length, offset: parseInt(offset) });
+});
+
+// GET /admin/events/export?fighter_id=xxx&format=csv
+router.get('/admin/events/export', adminAuth, (req, res) => {
+  const { fighter_id } = req.query;
+  if (!fighter_id) return res.status(400).json({ error: 'fighter_id required' });
+  const rows = db.prepare('SELECT * FROM agent_events WHERE fighter_id = ? ORDER BY id ASC').all(fighter_id);
+  const header = 'id,fighter_id,event_type,event_data,context,session_info,ip_address,user_agent,created_at\n';
+  const csv = rows.map(r => [r.id, r.fighter_id, csvEscape(r.event_type), csvEscape(r.event_data), csvEscape(r.context), csvEscape(r.session_info), csvEscape(r.ip_address), csvEscape(r.user_agent), csvEscape(r.created_at)].join(',')).join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="fighter_${fighter_id}_events.csv"`);
+  res.send(header + csv);
+});
+
+// GET /admin/events/export-all?format=csv
+router.get('/admin/events/export-all', adminAuth, (req, res) => {
+  const rows = db.prepare('SELECT * FROM agent_events ORDER BY id ASC').all();
+  const header = 'id,fighter_id,event_type,event_data,context,session_info,ip_address,user_agent,created_at\n';
+  const csv = rows.map(r => [r.id, r.fighter_id, csvEscape(r.event_type), csvEscape(r.event_data), csvEscape(r.context), csvEscape(r.session_info), csvEscape(r.ip_address), csvEscape(r.user_agent), csvEscape(r.created_at)].join(',')).join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="all_events.csv"');
+  res.send(header + csv);
+});
+
+// GET /admin/stats
+router.get('/admin/stats', adminAuth, (req, res) => {
+  const total = db.prepare('SELECT COUNT(*) as cnt FROM agent_events').get().cnt;
+  const byType = db.prepare('SELECT event_type, COUNT(*) as cnt FROM agent_events GROUP BY event_type ORDER BY cnt DESC').all();
+  const byDay = db.prepare("SELECT strftime('%Y-%m-%d', created_at) as day, COUNT(*) as cnt FROM agent_events GROUP BY day ORDER BY day DESC LIMIT 30").all();
+  const topFighters = db.prepare(`
+    SELECT ae.fighter_id, f.name, COUNT(*) as event_count
+    FROM agent_events ae LEFT JOIN fighters f ON ae.fighter_id = f.id
+    GROUP BY ae.fighter_id ORDER BY event_count DESC LIMIT 20
+  `).all();
+  res.json({ total_events: total, by_type: byType, by_day: byDay, top_fighters: topFighters });
+});
+
+// GET /admin/fighter/:id/full-history
+router.get('/admin/fighter/:id/full-history', adminAuth, (req, res) => {
+  const fighter = db.prepare('SELECT * FROM fighters WHERE id = ?').get(req.params.id);
+  if (!fighter) return res.status(404).json({ error: 'Fighter not found' });
+  const events = db.prepare('SELECT * FROM agent_events WHERE fighter_id = ? ORDER BY id ASC').all(req.params.id);
+  const fights = db.prepare(`
+    SELECT fi.*, f1.name as f1_name, f2.name as f2_name, fw.name as winner_name
+    FROM fights fi
+    JOIN fighters f1 ON fi.fighter1_id = f1.id
+    JOIN fighters f2 ON fi.fighter2_id = f2.id
+    LEFT JOIN fighters fw ON fi.winner_id = fw.id
+    WHERE fi.fighter1_id = ? OR fi.fighter2_id = ?
+    ORDER BY fi.id ASC
+  `).all(req.params.id, req.params.id);
+  const training = db.prepare('SELECT * FROM training_log WHERE fighter_id = ? ORDER BY id ASC').all(req.params.id);
+  res.json({ fighter, total_events: events.length, events, fights, training });
+});
+
+// GET /admin/fight/:id/full-replay
+router.get('/admin/fight/:id/full-replay', adminAuth, (req, res) => {
+  const fight = db.prepare('SELECT * FROM fights WHERE id = ?').get(req.params.id);
+  if (!fight) return res.status(404).json({ error: 'Fight not found' });
+  const f1 = db.prepare('SELECT id, name, discipline, elo FROM fighters WHERE id = ?').get(fight.fighter1_id);
+  const f2 = db.prepare('SELECT id, name, discipline, elo FROM fighters WHERE id = ?').get(fight.fighter2_id);
+  const actions = db.prepare('SELECT fa.*, f.name as fighter_name FROM fight_actions fa JOIN fighters f ON fa.fighter_id = f.id WHERE fa.fight_id = ? ORDER BY fa.id ASC').all(fight.id);
+  const messages = db.prepare('SELECT * FROM spectator_messages WHERE fight_id = ? ORDER BY id ASC').all(fight.id);
+  // Reconstruct HP progression
+  let hp1 = 100, hp2 = 100;
+  const sequence = actions.map((a, idx) => {
+    const isF1 = a.fighter_id === fight.fighter1_id;
+    const dmg = a.damage_dealt || 0;
+    if (isF1) hp2 = Math.max(0, hp2 - dmg); else hp1 = Math.max(0, hp1 - dmg);
+    return { turn: idx + 1, round: a.round, attacker: a.fighter_name, move: a.action, damage: dmg, critical: a.is_critical === 1, result: a.result_text, fighter1_hp: hp1, fighter2_hp: hp2 };
+  });
+  const winner = fight.winner_id ? db.prepare('SELECT name FROM fighters WHERE id = ?').get(fight.winner_id) : null;
+  res.json({ fight_id: fight.id, status: fight.status, fighter1: f1, fighter2: f2, end_method: fight.end_method, winner: winner?.name, sequence, spectator_messages: messages });
 });
 
 // GET /docs
