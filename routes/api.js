@@ -1886,10 +1886,11 @@ router.post('/auth/register', async (req, res) => {
     const token = jwt.sign({ id, username, email: emailLower }, process.env.JWT_SECRET, { expiresIn: '7d' });
     res.status(201).json({ token, user: { id, username, email: emailLower } });
   } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ error: 'Server error, please try again' });
+    console.error('Register error:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error, please try again', debug: err.message });
   }
 });
+
 
 // POST /auth/login
 router.post('/auth/login', async (req, res) => {
