@@ -769,7 +769,25 @@
     .link-agent-input:focus { border-color: var(--red); }
     .link-agent-btn { background: var(--red); color: #fff; border: none; border-radius: 5px; padding: 9px 18px; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
     .link-agent-btn:hover { background: #c8222f; }
+
+    /* 3D toggle button */
+    #btn-toggle-3d {
+      position:absolute; top:10px; right:12px; z-index:15;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); padding: 4px 12px; border-radius: 6px;
+      font-size: 0.78rem; font-weight: 700; letter-spacing: 1px;
+      cursor: pointer; transition: all 0.15s; font-family: var(--font-cond);
+    }
+    #btn-toggle-3d:hover { border-color: var(--gold); color: var(--gold); }
+    #btn-toggle-3d.active { background: var(--gold); border-color: var(--gold); color: #000; }
+    #arena-3d-wrap {
+      position: absolute; inset: 0; z-index: 5; display: none;
+      border-radius: 14px; overflow: hidden;
+    }
+    #arena-3d-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
   </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/arena3d.js"></script>
 </head>
 <body>
 
@@ -872,6 +890,10 @@
 
     <div class="arena-ring" id="arena-ring">
       <div class="arena-crowd" id="arena-crowd"></div>
+      <!-- 3D Arena container -->
+      <div id="arena-3d-wrap"></div>
+      <!-- Toggle 3D button -->
+      <button id="btn-toggle-3d" onclick="toggle3DArena()" title="Toggle 3D view">3D</button>
       <div class="arena-spot-l"></div>
       <div class="arena-spot-r"></div>
       <div class="oct-floor">
@@ -1744,6 +1766,8 @@ async function loadFightsView() {
 
 // ── ARENA ──
 let arenaInterval = null;
+let arena3dActive = (localStorage.getItem('coa_3d') === '1') && typeof Arena3D !== 'undefined';
+let arenaInstance3d = null;
 let currentArenaFightId = null;
 let arenaLastMsgId = 0;
 let replaySpeed = 1;
@@ -1755,6 +1779,47 @@ function setReplaySpeed(s) {
   ['sp-05','sp-1','sp-2'].forEach(id => document.getElementById(id)?.classList.remove('active'));
   const map = { 0.5: 'sp-05', 1: 'sp-1', 2: 'sp-2' };
   document.getElementById(map[s])?.classList.add('active');
+}
+
+function toggle3DArena() {
+  if (typeof Arena3D === 'undefined') {
+    alert('Three.js failed to load. 3D mode unavailable.');
+    return;
+  }
+  arena3dActive = !arena3dActive;
+  localStorage.setItem('coa_3d', arena3dActive ? '1' : '0');
+  document.getElementById('btn-toggle-3d').classList.toggle('active', arena3dActive);
+  const wrap = document.getElementById('arena-3d-wrap');
+  const svgFigs = document.querySelectorAll('.arena-fig');
+  const octFloor = document.querySelector('.oct-floor');
+  if (arena3dActive) {
+    if (!arenaInstance3d && currentArenaFightId) {
+      _init3DInstance();
+    }
+    wrap.style.display = 'block';
+    svgFigs.forEach(el => el.style.visibility = 'hidden');
+    if (octFloor) octFloor.style.visibility = 'hidden';
+  } else {
+    if (arenaInstance3d) { arenaInstance3d.destroy(); arenaInstance3d = null; }
+    wrap.style.display = 'none';
+    svgFigs.forEach(el => el.style.visibility = '');
+    if (octFloor) octFloor.style.visibility = '';
+  }
+}
+
+function _init3DInstance() {
+  if (arenaInstance3d) { arenaInstance3d.destroy(); arenaInstance3d = null; }
+  const wrap = document.getElementById('arena-3d-wrap');
+  if (!wrap || typeof Arena3D === 'undefined') return;
+  arenaInstance3d = new Arena3D(wrap);
+}
+
+function _sync3DToggleBtn() {
+  const btn = document.getElementById('btn-toggle-3d');
+  if (!btn) return;
+  const available = typeof Arena3D !== 'undefined';
+  btn.classList.toggle('active', arena3dActive && available);
+  if (!available) { btn.style.opacity = '0.4'; btn.title = 'Three.js unavailable'; }
 }
 
 function showFinishOverlay() {
@@ -2064,9 +2129,24 @@ function openArena(fightId) {
   currentArenaFightId = fightId;
   arenaLastMsgId = 0;
   showWalkout(fightId);
+  _sync3DToggleBtn();
+  if (arena3dActive && typeof Arena3D !== 'undefined') {
+    setTimeout(() => {
+      _init3DInstance();
+      document.getElementById('arena-3d-wrap').style.display = 'block';
+      document.querySelectorAll('.arena-fig').forEach(el => el.style.visibility = 'hidden');
+      const oct = document.querySelector('.oct-floor');
+      if (oct) oct.style.visibility = 'hidden';
+    }, 50);
+  }
 }
 
 function closeArena() {
+  if (arenaInstance3d) { arenaInstance3d.destroy(); arenaInstance3d = null; }
+  document.querySelectorAll('.arena-fig').forEach(el => el.style.visibility = '');
+  const oct2 = document.querySelector('.oct-floor');
+  if (oct2) oct2.style.visibility = '';
+  document.getElementById('arena-3d-wrap').style.display = 'none';
   if (arenaInterval) { clearInterval(arenaInterval); arenaInterval = null; }
   currentArenaFightId = null;
   arenaLastMsgId = 0;
@@ -2226,6 +2306,11 @@ function replayActions(actions, f1Id, f2Id, endMethod, onComplete) {
       atk.style.transform = atkSide === 'a' ? 'translateX(28px)' : 'scaleX(-1) translateX(28px)';
     }
 
+    // 3D move animation (runs in parallel with 2D)
+    if (arenaInstance3d) {
+      arenaInstance3d.animateMove(atkSide, move, null, replaySpeed);
+    }
+
     // Base delay scaled by speed
     const baseDelay = Math.round(1300 / replaySpeed);
     const hitDelay = Math.round(360 / replaySpeed);
@@ -2264,6 +2349,18 @@ function replayActions(actions, f1Id, f2Id, endMethod, onComplete) {
           setTimeout(() => fx.remove(), 900);
         }
 
+        // 3D hit effects
+        if (arenaInstance3d) {
+          const zone = move.includes('kick') || move === 'low_kick' ? 'legs'
+            : move === 'body_shot' || move === 'body_kick' ? 'body'
+            : 'head';
+          arenaInstance3d.animateHitReaction(defSide, zone, dmg);
+          const defFighter3d = arenaInstance3d[defSide === 'a' ? 'fighterA' : 'fighterB'];
+          const pos3d = defFighter3d ? defFighter3d.group.position.clone() : new THREE.Vector3(0,0,0);
+          arenaInstance3d.showDamageText(pos3d, '-' + Math.round(dmg), dmg > 12 ? '#e63946' : '#f4a534');
+          arenaInstance3d.spawnHitParticles(pos3d, dmg > 12 ? 0xe63946 : 0xf4a534, dmg > 10 ? 8 : 4);
+        }
+
         // Standard critical badge
         if (a.is_critical && !isKO) {
           const cf = document.createElement('div');
@@ -2282,6 +2379,7 @@ function replayActions(actions, f1Id, f2Id, endMethod, onComplete) {
           const koDelay = Math.round(500 / replaySpeed);
           setTimeout(() => {
             triggerKnockdown(defSide);
+            if (arenaInstance3d) arenaInstance3d.animateKO(defSide);
             setTimeout(() => {
               showKOText('KNOCKOUT!', false);
               if (onComplete) setTimeout(onComplete, 1000);
