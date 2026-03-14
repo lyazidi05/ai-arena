@@ -1490,7 +1490,7 @@ async function openProfile(name) {
         <div class="hist-opp">${r.opponent}</div>
         <div class="hist-method">${r.total_fights} fights · ${r.my_wins}W-${r.their_wins}L${r.is_rivalry ? ' <span class="badge-rivalry">RIVALRY</span>' : ''}</div>
       </div>`).join('');
-    histEl.parentNode.appendChild(rivDiv);
+    histEl.appendChild(rivDiv);
   }
 }
 

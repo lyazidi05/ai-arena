@@ -1046,9 +1046,9 @@ router.post('/fight/:id/action', auth, (req, res) => {
 
     // ── Update rivalry record ──
     const [rivalA, rivalB] = [Math.min(winnerId, loserId), Math.max(winnerId, loserId)];
-    const existing = db.prepare('SELECT * FROM rivalries WHERE fighter_a_id = ? AND fighter_b_id = ?').get(rivalA, rivalB);
+    const existing = rivalA !== rivalB ? db.prepare('SELECT * FROM rivalries WHERE fighter_a_id = ? AND fighter_b_id = ?').get(rivalA, rivalB) : null;
     const aWon = winnerId === rivalA ? 1 : 0;
-    if (!existing) {
+    if (rivalA !== rivalB && !existing) {
       db.prepare(`INSERT INTO rivalries (fighter_a_id, fighter_b_id, total_fights, fighter_a_wins, fighter_b_wins, is_rivalry)
                   VALUES (?, ?, 1, ?, ?, 0)`)
         .run(rivalA, rivalB, aWon, 1 - aWon);

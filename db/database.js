@@ -265,6 +265,9 @@ db.exec(`
   );
 `);
 
+// ── Migration: purge self-rivalries ──
+db.prepare('DELETE FROM rivalries WHERE fighter_a_id = fighter_b_id').run();
+
 // ── Migration: add fatigue columns ──
 {
   const cols = db.prepare('PRAGMA table_info(fighters)').all().map(c => c.name);
