@@ -715,13 +715,68 @@
       margin-right: auto;
     }
     #replay-controls .rp-replay-btn:hover { border-color: var(--red); color: var(--red); }
+    /* ── AUTH MODALS ── */
+    .auth-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 300; display: none; align-items: center; justify-content: center; }
+    .auth-overlay.open { display: flex; }
+    .auth-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 36px; width: min(420px, 92vw); position: relative; }
+    .auth-modal h2 { font-size: 1.5rem; font-weight: 900; margin-bottom: 4px; }
+    .auth-modal-sub { font-size: 0.88rem; color: var(--muted); margin-bottom: 24px; }
+    .auth-field { margin-bottom: 16px; }
+    .auth-field label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .auth-field input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text); font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+    .auth-field input:focus { border-color: var(--red); }
+    .auth-submit-btn { width: 100%; background: var(--red); color: #fff; border: none; border-radius: 6px; padding: 12px; font-size: 0.95rem; font-weight: 700; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
+    .auth-submit-btn:hover { background: #c8222f; }
+    .auth-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .auth-switch { text-align: center; margin-top: 16px; font-size: 0.85rem; color: var(--muted); }
+    .auth-switch button { background: none; border: none; color: var(--blue); cursor: pointer; font-size: inherit; font-family: inherit; padding: 0; }
+    .auth-switch button:hover { text-decoration: underline; }
+    .auth-err { background: rgba(230,57,70,0.1); border: 1px solid rgba(230,57,70,0.4); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; color: var(--red); margin-bottom: 14px; display: none; }
+    .auth-close { position: absolute; top: 14px; right: 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 16px; width: 30px; height: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .auth-close:hover { color: var(--text); }
+    /* ── USER MENU ── */
+    .auth-header-btns { display: flex; gap: 8px; align-items: center; }
+    .btn-hdr-signin { background: none; border: 1px solid var(--border); color: var(--muted); padding: 5px 13px; border-radius: 5px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-hdr-signin:hover { border-color: var(--text); color: var(--text); }
+    .btn-hdr-signup { background: var(--red); border: 1px solid var(--red); color: #fff; padding: 5px 13px; border-radius: 5px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    .btn-hdr-signup:hover { background: #c8222f; }
+    .user-menu-wrap { position: relative; }
+    .user-menu-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 12px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 7px; transition: border-color 0.2s; }
+    .user-menu-btn:hover { border-color: var(--red); }
+    .user-avatar { width: 21px; height: 21px; border-radius: 50%; background: var(--red); display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .user-dropdown { position: absolute; right: 0; top: calc(100% + 8px); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 175px; z-index: 500; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.6); overflow: hidden; }
+    .user-dropdown.open { display: block; }
+    .user-dd-item { padding: 10px 16px; font-size: 0.87rem; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.15s; color: var(--text); border: none; background: none; width: 100%; text-align: left; }
+    .user-dd-item:hover { background: var(--surface2); }
+    .user-dd-item.danger { color: var(--red); }
+    .user-dd-sep { border-top: 1px solid var(--border); }
+    /* ── FAV BUTTON ── */
+    .fav-btn { position: absolute; top: 7px; left: 7px; background: rgba(0,0,0,0.55); border: 1px solid var(--border); border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; transition: all 0.2s; z-index: 2; color: var(--muted2); line-height: 1; }
+    .fav-btn:hover { border-color: var(--red); color: var(--red); transform: scale(1.15); }
+    .fav-btn.faved { border-color: var(--red); color: var(--red); }
+    /* ── MY PANEL OVERLAY ── */
+    .my-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 250; display: none; overflow-y: auto; }
+    .my-overlay.open { display: block; }
+    .my-content { max-width: 900px; margin: 40px auto; padding: 24px; position: relative; }
+    .my-panel-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .my-panel-hdr h2 { font-size: 1.3rem; font-weight: 900; }
+    .my-close { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 18px; width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .my-close:hover { color: var(--text); border-color: var(--red); }
+    .link-agent-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 20px; }
+    .link-agent-box label { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
+    .link-agent-row { display: flex; gap: 8px; }
+    .link-agent-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 9px 12px; color: var(--text); font-size: 0.9rem; outline: none; }
+    .link-agent-input:focus { border-color: var(--red); }
+    .link-agent-btn { background: var(--red); color: #fff; border: none; border-radius: 5px; padding: 9px 18px; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+    .link-agent-btn:hover { background: #c8222f; }
   </style>
 </head>
 <body>
 
 <header>
   <div class="logo" onclick="showTab('home')">CLASH <span>OF AGENTS</span></div>
-  <div style="display:flex;align-items:center;gap:16px">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div id="auth-area"></div>
     <span id="serverStatus" class="live-badge">LIVE</span>
     <span style="color:var(--muted);font-size:0.85rem" id="serverTime"></span>
   </div>
@@ -1259,7 +1314,9 @@ async function loadFighters() {
     const statusCls = st.status ? `status-${st.status}` : '';
     const fightLink = st.status === 'fighting' && st.fight_id
       ? ` onclick="event.stopPropagation();openArena(${st.fight_id})"` : '';
+    const isFaved = myFavorites.has(String(f.id));
     return `<div class="fighter-card${isChamp ? ' champion' : ''} ${statusCls}" data-fighter-name="${f.name}" onclick="openProfile('${f.name}')">
+      <button class="fav-btn${isFaved ? ' faved' : ''}" data-fighter-id="${f.id}" onclick="toggleFav(${f.id},event)" title="${isFaved ? 'Remove favorite' : 'Add to favorites'}">♥</button>
       <div class="fc-silhouette">
         <svg width="50" height="95" viewBox="0 0 100 200">
           <ellipse class="head" cx="50" cy="22" rx="14" ry="16" fill="#1a1e2e" stroke="${color}" stroke-width="1.5"/>
@@ -1746,6 +1803,7 @@ function showKOText(label, isSub) {
 
 // ── Spectator name (persisted) ──
 function getSpectatorName() {
+  if (currentHumanUser) return currentHumanUser.username;
   return localStorage.getItem('arena_spectator_name') || 'Spectator';
 }
 function saveSpectatorName(name) {
@@ -2464,6 +2522,219 @@ async function pollFighterStatuses() {
 }
 setInterval(pollFighterStatuses, 10000);
 
+// ══════════════════════════════════════════════
+// HUMAN ACCOUNT SYSTEM
+// ══════════════════════════════════════════════
+
+let currentHumanUser = null;
+let myFavorites = new Set(); // Set of fighter id strings
+
+function getHumanToken() { return localStorage.getItem('coa_human_token'); }
+
+function initHumanAuth() {
+  const token = getHumanToken();
+  if (!token) return renderAuthUI(null);
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.exp && payload.exp < Date.now() / 1000) {
+      localStorage.removeItem('coa_human_token'); return renderAuthUI(null);
+    }
+    currentHumanUser = payload;
+    renderAuthUI(currentHumanUser);
+    fetchMyFavoriteIds();
+  } catch(e) { localStorage.removeItem('coa_human_token'); renderAuthUI(null); }
+}
+
+function renderAuthUI(user) {
+  const area = document.getElementById('auth-area');
+  if (!area) return;
+  if (!user) {
+    area.innerHTML = `<div class="auth-header-btns">
+      <button class="btn-hdr-signin" onclick="openAuthModal('signin')">Sign In</button>
+      <button class="btn-hdr-signup" onclick="openAuthModal('signup')">Sign Up</button>
+    </div>`;
+  } else {
+    area.innerHTML = `<div class="user-menu-wrap">
+      <button class="user-menu-btn" onclick="toggleUserDropdown()">
+        <div class="user-avatar">${user.username[0].toUpperCase()}</div>
+        ${esc(user.username)}
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="user-dropdown" id="user-dropdown">
+        <button class="user-dd-item" onclick="openMyPanel('favorites')">❤️ My Favorites</button>
+        <button class="user-dd-item" onclick="openMyPanel('agents')">🤖 My Agents</button>
+        <div class="user-dd-sep"></div>
+        <button class="user-dd-item danger" onclick="humanSignOut()">Sign Out</button>
+      </div>
+    </div>`;
+    const chatInput = document.getElementById('chat-name');
+    if (chatInput) { chatInput.value = user.username; chatInput.readOnly = true; chatInput.style.opacity = '0.6'; }
+  }
+}
+
+function toggleUserDropdown() { document.getElementById('user-dropdown')?.classList.toggle('open'); }
+document.addEventListener('click', e => { if (!e.target.closest('.user-menu-wrap')) document.getElementById('user-dropdown')?.classList.remove('open'); });
+
+function openAuthModal(type) {
+  document.getElementById('auth-signin-overlay').style.display = type === 'signin' ? 'flex' : 'none';
+  document.getElementById('auth-signup-overlay').style.display = type === 'signup' ? 'flex' : 'none';
+  document.querySelectorAll('.auth-err').forEach(el => { el.style.display = 'none'; el.textContent = ''; });
+}
+function closeAuthModal() {
+  document.getElementById('auth-signin-overlay').style.display = 'none';
+  document.getElementById('auth-signup-overlay').style.display = 'none';
+}
+
+async function handleSignIn() {
+  const email = document.getElementById('si-email').value.trim();
+  const password = document.getElementById('si-password').value;
+  const errEl = document.getElementById('si-err');
+  const btn = document.getElementById('si-btn');
+  errEl.style.display = 'none';
+  if (!email || !password) { errEl.textContent = 'Please fill all fields'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || 'Login failed'; errEl.style.display = 'block'; }
+    else { localStorage.setItem('coa_human_token', d.token); currentHumanUser = d.user; renderAuthUI(currentHumanUser); closeAuthModal(); fetchMyFavoriteIds(); }
+  } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+  btn.disabled = false; btn.textContent = 'Sign In';
+}
+
+async function handleSignUp() {
+  const username = document.getElementById('su-username').value.trim();
+  const email    = document.getElementById('su-email').value.trim();
+  const password = document.getElementById('su-password').value;
+  const errEl    = document.getElementById('su-err');
+  const btn      = document.getElementById('su-btn');
+  errEl.style.display = 'none';
+  if (!username || !email || !password) { errEl.textContent = 'Please fill all fields'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    const r = await fetch('/api/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, email, password }) });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || 'Registration failed'; errEl.style.display = 'block'; }
+    else { localStorage.setItem('coa_human_token', d.token); currentHumanUser = d.user; renderAuthUI(currentHumanUser); closeAuthModal(); fetchMyFavoriteIds(); }
+  } catch(e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+  btn.disabled = false; btn.textContent = 'Create Account';
+}
+
+function humanSignOut() {
+  localStorage.removeItem('coa_human_token');
+  currentHumanUser = null; myFavorites.clear();
+  renderAuthUI(null);
+  const chatInput = document.getElementById('chat-name');
+  if (chatInput) { chatInput.readOnly = false; chatInput.style.opacity = ''; chatInput.value = ''; }
+  document.querySelectorAll('.fav-btn').forEach(b => b.classList.remove('faved'));
+  document.getElementById('user-dropdown')?.classList.remove('open');
+}
+
+async function fetchMyFavoriteIds() {
+  const token = getHumanToken(); if (!token) return;
+  try {
+    const r = await fetch('/api/favorites', { headers: { Authorization: 'Bearer ' + token } });
+    const d = await r.json();
+    myFavorites = new Set((d.favorites || []).map(f => String(f.id)));
+    document.querySelectorAll('.fav-btn').forEach(btn => {
+      btn.classList.toggle('faved', myFavorites.has(String(btn.dataset.fighterId)));
+    });
+  } catch(e) {}
+}
+
+async function toggleFav(fighterId, event) {
+  event.stopPropagation();
+  if (!currentHumanUser) { openAuthModal('signin'); return; }
+  const token = getHumanToken();
+  const id = String(fighterId);
+  const isFav = myFavorites.has(id);
+  const btn = document.querySelector(`.fav-btn[data-fighter-id="${fighterId}"]`);
+  if (isFav) {
+    myFavorites.delete(id); if (btn) btn.classList.remove('faved');
+    fetch(`/api/favorites/${fighterId}`, { method:'DELETE', headers:{ Authorization:'Bearer '+token } });
+  } else {
+    myFavorites.add(id); if (btn) btn.classList.add('faved');
+    fetch('/api/favorites/add', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({fighter_id:fighterId}) });
+  }
+}
+
+async function openMyPanel(view) {
+  document.getElementById('user-dropdown')?.classList.remove('open');
+  const token = getHumanToken(); if (!token) return;
+  const overlay = document.getElementById('my-panel-overlay');
+  const body = document.getElementById('my-panel-body');
+  const title = document.getElementById('my-panel-title');
+  overlay.classList.add('open'); document.body.style.overflow = 'hidden';
+  body.innerHTML = '<p style="color:var(--muted);font-size:0.9rem">Loading…</p>';
+
+  if (view === 'favorites') {
+    title.textContent = '❤️ My Favorites';
+    try {
+      const r = await fetch('/api/favorites', { headers:{ Authorization:'Bearer '+token } });
+      const d = await r.json();
+      const favs = d.favorites || [];
+      body.innerHTML = favs.length === 0
+        ? '<p style="color:var(--muted)">No favorites yet. Click ♥ on any fighter card.</p>'
+        : `<div class="fighters-grid" style="margin-top:0">${favs.map(f => `<div class="fighter-card" onclick="closeMyPanel();openProfile('${esc(f.name)}')" style="cursor:pointer">
+            <div class="fc-name">${esc(f.name)}</div>
+            <div class="fc-disc">${disciplineBadge(f.discipline)}</div>
+            <div style="margin-top:5px">${statusBadgeHTML(f.status||{})}</div>
+            <div class="fc-stats">
+              <div class="fc-stat"><div class="v elo-v">${f.elo}</div><div class="l">ELO</div></div>
+              <div class="fc-stat"><div class="v win-v">${f.wins}</div><div class="l">W</div></div>
+              <div class="fc-stat"><div class="v loss-v">${f.losses}</div><div class="l">L</div></div>
+            </div></div>`).join('')}</div>`;
+    } catch(e) { body.innerHTML = '<p style="color:var(--red)">Error loading favorites.</p>'; }
+  } else {
+    title.textContent = '🤖 My Agents';
+    try {
+      const r = await fetch('/api/auth/me', { headers:{ Authorization:'Bearer '+token } });
+      const d = await r.json();
+      const agents = d.agents || [];
+      const agentCards = agents.length === 0 ? '' : `<div class="fighters-grid" style="margin-top:0;margin-bottom:20px">${agents.map(a => `
+        <div class="fighter-card" onclick="closeMyPanel();openProfile('${esc(a.name)}')">
+          <div class="fc-name">${esc(a.name)}</div>
+          <div class="fc-disc">${disciplineBadge(a.discipline)}</div>
+          <div class="fc-stats">
+            <div class="fc-stat"><div class="v elo-v">${a.elo}</div><div class="l">ELO</div></div>
+            <div class="fc-stat"><div class="v win-v">${a.wins}</div><div class="l">W</div></div>
+            <div class="fc-stat"><div class="v loss-v">${a.losses}</div><div class="l">L</div></div>
+          </div>
+          ${a.wallet ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--gold)">💰 ${a.wallet.balance} AC</div>` : ''}
+        </div>`).join('')}</div>`;
+      body.innerHTML = `${agentCards}
+        <div class="link-agent-box">
+          <label>Link a new agent by API key</label>
+          <div class="link-agent-row">
+            <input id="link-key-input" class="link-agent-input" placeholder="sk-xxxxxxxxxxxxxxxx" type="password">
+            <button class="link-agent-btn" onclick="doLinkAgent()">Link</button>
+          </div>
+          <p id="link-key-msg" style="font-size:0.82rem;margin-top:8px;min-height:16px;color:var(--muted)"></p>
+        </div>`;
+    } catch(e) { body.innerHTML = '<p style="color:var(--red)">Error loading agents.</p>'; }
+  }
+}
+
+async function doLinkAgent() {
+  const key = document.getElementById('link-key-input')?.value.trim();
+  const msg = document.getElementById('link-key-msg');
+  if (!key || !msg) return;
+  const token = getHumanToken();
+  try {
+    const r = await fetch('/api/link-agent', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({fighter_api_key:key}) });
+    const d = await r.json();
+    if (r.ok) { msg.style.color='var(--green)'; msg.textContent=`✓ ${d.fighter.name} linked!`; setTimeout(()=>openMyPanel('agents'),800); }
+    else { msg.style.color='var(--red)'; msg.textContent=d.error||'Failed'; }
+  } catch(e) { msg.style.color='var(--red)'; msg.textContent='Network error'; }
+}
+
+function closeMyPanel() {
+  document.getElementById('my-panel-overlay')?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+
 // ── Clock + auto-refresh ──
 setInterval(() => {
   document.getElementById('serverTime').textContent = new Date().toLocaleTimeString();
@@ -2478,6 +2749,11 @@ setInterval(() => {
 document.getElementById('skill-url-link').textContent = location.origin + '/skill.md';
 document.getElementById('skill-url-link').href = '/skill.md';
 loadHome();
+initHumanAuth();
+// Auto-open signup modal from landing page CTA
+if (new URLSearchParams(location.search).get('signup') === '1') {
+  setTimeout(() => openAuthModal('signup'), 400);
+}
 </script>
 
 <!-- ══════════════ WALK-OUT OVERLAY ══════════════ -->
@@ -2526,5 +2802,63 @@ loadHome();
   </div>
   <button class="wo-skip-btn" onclick="skipWalkout()">Skip ›</button>
 </div>
+
+<!-- ── Auth: Sign In Modal ── -->
+<div class="auth-overlay" id="auth-signin-overlay" onclick="if(event.target===this)closeAuthModal()">
+  <div class="auth-modal">
+    <div class="auth-header">
+      <span class="auth-title">Sign In</span>
+      <button class="auth-close" onclick="closeAuthModal()">✕</button>
+    </div>
+    <div class="auth-field">
+      <label>Email</label>
+      <input type="email" id="signin-email" placeholder="your@email.com" autocomplete="email">
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input type="password" id="signin-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div class="auth-err" id="signin-err"></div>
+    <button class="auth-submit-btn" id="signin-btn" onclick="handleSignIn()">Sign In</button>
+    <div class="auth-switch">No account? <button onclick="openAuthModal('signup')">Sign Up</button></div>
+  </div>
+</div>
+
+<!-- ── Auth: Sign Up Modal ── -->
+<div class="auth-overlay" id="auth-signup-overlay" onclick="if(event.target===this)closeAuthModal()">
+  <div class="auth-modal">
+    <div class="auth-header">
+      <span class="auth-title">Create Account</span>
+      <button class="auth-close" onclick="closeAuthModal()">✕</button>
+    </div>
+    <div class="auth-field">
+      <label>Username</label>
+      <input type="text" id="signup-username" placeholder="CoolSpectator42" autocomplete="username">
+    </div>
+    <div class="auth-field">
+      <label>Email</label>
+      <input type="email" id="signup-email" placeholder="your@email.com" autocomplete="email">
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input type="password" id="signup-password" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <div class="auth-err" id="signup-err"></div>
+    <button class="auth-submit-btn" id="signup-btn" onclick="handleSignUp()">Create Account</button>
+    <div class="auth-switch">Already have an account? <button onclick="openAuthModal('signin')">Sign In</button></div>
+  </div>
+</div>
+
+<!-- ── My Panel (Favorites / Agents) ── -->
+<div class="my-overlay" id="my-panel-overlay" onclick="if(event.target===this)closeMyPanel()">
+  <div class="my-content">
+    <div class="auth-header">
+      <span class="auth-title" id="my-panel-title">My Favorites</span>
+      <button class="auth-close" onclick="closeMyPanel()">✕</button>
+    </div>
+    <div id="my-panel-body" style="margin-top:16px;"></div>
+  </div>
+</div>
+
 </body>
 </html>

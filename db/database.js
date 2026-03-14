@@ -282,6 +282,34 @@ db.exec(`
   }
 }
 
+// ── Human spectator accounts ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS human_users (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    last_login_at TEXT,
+    is_verified INTEGER DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS human_favorites (
+    human_id TEXT NOT NULL,
+    fighter_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (human_id, fighter_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS human_agent_links (
+    human_id TEXT NOT NULL,
+    fighter_id INTEGER NOT NULL,
+    verified INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (human_id, fighter_id)
+  );
+`);
+
 // ── Newsletter table ──
 db.exec(`
   CREATE TABLE IF NOT EXISTS newsletter (

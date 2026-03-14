@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { trackEvent, addToDecisionChain, getRecentChain, deriveHitZone } = require('../engine/tracker');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { randomUUID } = require('crypto');
 const {
   getWeightClass, calcBaseStats, generateApiKey,
   resolveAction, calcEloChange, canTrain, calcTrainingGain,
@@ -52,6 +55,19 @@ function getFighterStatus(fighter) {
   if (hoursAgo > 2) return { status: 'offline', detail: 'Inactif ' + Math.floor(hoursAgo) + 'h', color: 'gray' };
 
   return { status: 'idle', detail: 'Repos', color: 'green' };
+}
+
+// JWT middleware for human users
+function authenticateHuman(req, res, next) {
+  const header = req.headers['authorization'];
+  if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: 'Missing authorization token' });
+  const token = header.slice(7);
+  try {
+    req.humanUser = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
 }
 
 // Helper: optional auth (returns fighter or null, never fails)
@@ -1823,6 +1839,106 @@ router.get('/admin/fight/:id/full-replay', adminAuth, (req, res) => {
   });
   const winner = fight.winner_id ? db.prepare('SELECT name FROM fighters WHERE id = ?').get(fight.winner_id) : null;
   res.json({ fight_id: fight.id, status: fight.status, fighter1: f1, fighter2: f2, end_method: fight.end_method, winner: winner?.name, sequence, spectator_messages: messages });
+});
+
+// ─────────────────────────────────────────
+// HUMAN SPECTATOR ACCOUNTS
+// ─────────────────────────────────────────
+
+// POST /auth/register
+router.post('/auth/register', async (req, res) => {
+  const { email, username, password } = req.body;
+  if (!email || !username || !password) return res.status(400).json({ error: 'email, username, password required' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
+  if (username.length < 3 || username.length > 20) return res.status(400).json({ error: 'Username must be 3–20 characters' });
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) return res.status(400).json({ error: 'Username: letters, numbers, _ and - only' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+  const emailLower = email.trim().toLowerCase();
+  if (db.prepare('SELECT id FROM human_users WHERE email = ?').get(emailLower)) return res.status(409).json({ error: 'Email already registered' });
+  if (db.prepare('SELECT id FROM human_users WHERE username = ?').get(username)) return res.status(409).json({ error: 'Username already taken' });
+
+  const id = randomUUID();
+  const password_hash = await bcrypt.hash(password, 10);
+  db.prepare('INSERT INTO human_users (id, email, username, password_hash) VALUES (?, ?, ?, ?)').run(id, emailLower, username, password_hash);
+
+  const token = jwt.sign({ id, username, email: emailLower }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user: { id, username, email: emailLower } });
+});
+
+// POST /auth/login
+router.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+  const user = db.prepare('SELECT * FROM human_users WHERE email = ?').get(email.trim().toLowerCase());
+  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
+  db.prepare("UPDATE human_users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
+  const token = jwt.sign({ id: user.id, username: user.username, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+});
+
+// GET /auth/me
+router.get('/auth/me', authenticateHuman, (req, res) => {
+  const user = db.prepare('SELECT id, email, username, created_at, last_login_at FROM human_users WHERE id = ?').get(req.humanUser.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const favorites = db.prepare(`
+    SELECT f.id, f.name, f.discipline, f.elo, f.wins, f.losses, f.draws, f.power, f.speed, f.agility, f.striking, f.grappling, f.endurance, f.fatigue
+    FROM human_favorites hf JOIN fighters f ON hf.fighter_id = f.id
+    WHERE hf.human_id = ? ORDER BY hf.created_at DESC
+  `).all(req.humanUser.id);
+
+  const agents = db.prepare(`
+    SELECT f.id, f.name, f.discipline, f.elo, f.wins, f.losses, f.draws
+    FROM human_agent_links hal JOIN fighters f ON hal.fighter_id = f.id
+    WHERE hal.human_id = ? AND hal.verified = 1 ORDER BY hal.created_at DESC
+  `).all(req.humanUser.id);
+
+  // For linked agents, include wallet and inventory (read-only)
+  const agentsWithData = agents.map(a => {
+    const wallet = db.prepare('SELECT balance, total_earned, total_spent FROM fighter_wallets WHERE fighter_id = ?').get(a.id);
+    const inventory = db.prepare("SELECT item_name, category, remaining_uses, effect_value FROM inventory WHERE fighter_id = ? AND is_active = 1").all(a.id);
+    return { ...a, wallet: wallet || null, inventory };
+  });
+
+  res.json({ user, favorites: favorites.map(f => ({ ...f, status: getFighterStatus(f) })), agents: agentsWithData });
+});
+
+// POST /favorites/add
+router.post('/favorites/add', authenticateHuman, (req, res) => {
+  const { fighter_id } = req.body;
+  if (!fighter_id) return res.status(400).json({ error: 'fighter_id required' });
+  if (!db.prepare('SELECT id FROM fighters WHERE id = ?').get(fighter_id)) return res.status(404).json({ error: 'Fighter not found' });
+  db.prepare('INSERT OR IGNORE INTO human_favorites (human_id, fighter_id) VALUES (?, ?)').run(req.humanUser.id, fighter_id);
+  res.json({ added: true });
+});
+
+// DELETE /favorites/:fighter_id
+router.delete('/favorites/:fighter_id', authenticateHuman, (req, res) => {
+  db.prepare('DELETE FROM human_favorites WHERE human_id = ? AND fighter_id = ?').run(req.humanUser.id, req.params.fighter_id);
+  res.json({ removed: true });
+});
+
+// GET /favorites
+router.get('/favorites', authenticateHuman, (req, res) => {
+  const favorites = db.prepare(`
+    SELECT f.id, f.name, f.discipline, f.elo, f.wins, f.losses, f.draws, f.fatigue
+    FROM human_favorites hf JOIN fighters f ON hf.fighter_id = f.id
+    WHERE hf.human_id = ? ORDER BY hf.created_at DESC
+  `).all(req.humanUser.id);
+  res.json({ favorites: favorites.map(f => ({ ...f, status: getFighterStatus(f) })) });
+});
+
+// POST /link-agent
+router.post('/link-agent', authenticateHuman, (req, res) => {
+  const { fighter_api_key } = req.body;
+  if (!fighter_api_key) return res.status(400).json({ error: 'fighter_api_key required' });
+  const fighter = db.prepare('SELECT id, name FROM fighters WHERE api_key = ?').get(fighter_api_key);
+  if (!fighter) return res.status(404).json({ error: 'Invalid API key — fighter not found' });
+  db.prepare('INSERT OR REPLACE INTO human_agent_links (human_id, fighter_id, verified) VALUES (?, ?, 1)').run(req.humanUser.id, fighter.id);
+  res.json({ linked: true, fighter: { id: fighter.id, name: fighter.name } });
 });
 
 // ─────────────────────────────────────────
