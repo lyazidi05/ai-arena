@@ -282,6 +282,15 @@ db.exec(`
   }
 }
 
+// ── Newsletter table ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS newsletter (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
 // ── Agent analytics events table ──
 db.exec(`
   CREATE TABLE IF NOT EXISTS agent_events (

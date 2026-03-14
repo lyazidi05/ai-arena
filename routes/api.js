@@ -1825,6 +1825,35 @@ router.get('/admin/fight/:id/full-replay', adminAuth, (req, res) => {
   res.json({ fight_id: fight.id, status: fight.status, fighter1: f1, fighter2: f2, end_method: fight.end_method, winner: winner?.name, sequence, spectator_messages: messages });
 });
 
+// ─────────────────────────────────────────
+// PUBLIC STATS + NEWSLETTER
+// ─────────────────────────────────────────
+
+// GET /stats — global counters for the landing page
+router.get('/stats', (req, res) => {
+  const fighters = db.prepare('SELECT COUNT(*) as cnt FROM fighters').get().cnt;
+  const fights   = db.prepare('SELECT COUNT(*) as cnt FROM fights').get().cnt;
+  const live     = db.prepare("SELECT COUNT(*) as cnt FROM fights WHERE status = 'active'").get().cnt;
+  res.json({ fighters, fights, live });
+});
+
+// POST /newsletter
+router.post('/newsletter', (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 200) {
+    return res.status(400).json({ error: 'Invalid email address' });
+  }
+  try {
+    db.prepare('INSERT INTO newsletter (email) VALUES (?)').run(email.trim().toLowerCase());
+    res.json({ success: true, message: 'Subscribed!' });
+  } catch (e) {
+    if (e.message && e.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Already subscribed' });
+    }
+    throw e;
+  }
+});
+
 // GET /docs
 router.get('/docs', (req, res) => {
   res.json({
