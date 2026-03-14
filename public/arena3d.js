@@ -56,73 +56,82 @@ function _resolveProps(props) {
 // 'at' is fraction of total duration
 // 'set' targets: reached by time of NEXT event (trigger or set)
 // hips.position.y is relative offset from 1.0
+//
+// AXIS CONVENTION: fighters face each other on the X axis.
+// Fighter A (blue) at x=-0.8 faces +X. Fighter B (red) at x=+0.8 faces -X (rotation.y=PI).
+// Because fighter B's group is rotated PI around Y, its local +X = world -X.
+// So BOTH fighters use hips.position.x = positive to step toward their opponent.
+// For arm punches: rotation.z = positive swings arm toward local +X (opponent).
+// For kicks: rotation.z = positive swings leg toward local +X (opponent).
 const _MOVES = {
+  // ── Striking ──
   jab: { duration: 400, phases: [
-    { at: 0, set: { 'leftArmGroup.rotation.x': -0.3, 'leftForearmGroup.rotation.x': -0.2, 'hips.position.z': 0.3 } },
+    { at: 0, set: { 'leftArmGroup.rotation.x': -0.3, 'leftArmGroup.rotation.z': 1.4, 'leftForearmGroup.rotation.x': 0, 'leftForearmGroup.rotation.z': 0, 'hips.position.x': 0.25 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   cross: { duration: 500, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -0.2, 'rightForearmGroup.rotation.x': -0.1, 'hips.rotation.y': -0.4, 'hips.position.z': 0.35 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -0.3, 'rightArmGroup.rotation.z': 1.4, 'rightForearmGroup.rotation.x': 0, 'rightForearmGroup.rotation.z': 0, 'hips.rotation.y': -0.4, 'hips.position.x': 0.3 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   hook: { duration: 550, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -0.8, 'rightArmGroup.rotation.z': -1.2, 'rightForearmGroup.rotation.x': -1.5, 'hips.rotation.y': -0.6, 'hips.position.z': 0.25 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -0.8, 'rightArmGroup.rotation.z': 0.7, 'rightForearmGroup.rotation.x': -1.5, 'rightForearmGroup.rotation.z': 0, 'hips.rotation.y': -0.6, 'hips.position.x': 0.2 } },
     { at: 0.45, hit: true },
     { at: 0.65, set: 'guard' }
   ]},
   uppercut: { duration: 600, phases: [
-    { at: 0, set: { 'hips.position.y': -0.1, 'hips.position.z': 0.2, 'rightArmGroup.rotation.x': 0.3 } },
-    { at: 0.3, set: { 'hips.position.y': 0.1, 'hips.position.z': 0.3, 'rightArmGroup.rotation.x': -1.8, 'rightForearmGroup.rotation.x': -0.5 } },
+    { at: 0, set: { 'hips.position.y': -0.1, 'hips.position.x': 0.15, 'rightArmGroup.rotation.x': 0.3, 'rightArmGroup.rotation.z': 0.5 } },
+    { at: 0.3, set: { 'hips.position.y': 0.1, 'hips.position.x': 0.25, 'rightArmGroup.rotation.x': -1.8, 'rightArmGroup.rotation.z': 1.2, 'rightForearmGroup.rotation.x': -0.5, 'rightForearmGroup.rotation.z': 0 } },
     { at: 0.5, hit: true },
     { at: 0.7, set: 'guard' }
   ]},
   body_shot: { duration: 450, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -0.3, 'rightArmGroup.rotation.z': -0.8, 'hips.rotation.y': -0.3, 'hips.position.y': -0.05, 'hips.position.z': 0.3 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -0.3, 'rightArmGroup.rotation.z': 0.9, 'hips.rotation.y': -0.3, 'hips.position.y': -0.05, 'hips.position.x': 0.25 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   low_kick: { duration: 600, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -0.8, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': -0.3, 'hips.position.z': 0.2 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -0.1, 'rightLegGroup.rotation.z': 0.8, 'rightCalfGroup.rotation.x': 0.4, 'hips.rotation.y': -0.3, 'hips.position.x': 0.15 } },
     { at: 0.4, hit: true },
     { at: 0.65, set: 'guard' }
   ]},
   high_kick: { duration: 800, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -2.0, 'rightCalfGroup.rotation.x': 0.8, 'hips.rotation.y': -0.5, 'hips.position.y': 0.05, 'hips.position.z': 0.25 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -0.2, 'rightLegGroup.rotation.z': 1.8, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': -0.5, 'hips.position.y': 0.05, 'hips.position.x': 0.2 } },
     { at: 0.4, hit: true },
     { at: 0.7, set: 'guard' }
   ]},
   body_kick: { duration: 650, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -1.3, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': -0.5, 'hips.position.z': 0.25 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -0.2, 'rightLegGroup.rotation.z': 1.3, 'rightCalfGroup.rotation.x': 0.4, 'hips.rotation.y': -0.5, 'hips.position.x': 0.2 } },
     { at: 0.4, hit: true },
     { at: 0.65, set: 'guard' }
   ]},
   knee: { duration: 500, phases: [
-    { at: 0, set: { 'rightLegGroup.rotation.x': -1.5, 'rightCalfGroup.rotation.x': 1.5, 'hips.position.z': 0.35 } },
+    { at: 0, set: { 'rightLegGroup.rotation.x': -0.3, 'rightLegGroup.rotation.z': 1.0, 'rightCalfGroup.rotation.x': 1.5, 'hips.position.x': 0.3 } },
     { at: 0.4, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   elbow: { duration: 450, phases: [
-    { at: 0, set: { 'rightArmGroup.rotation.x': -1.5, 'rightForearmGroup.rotation.x': -2.5, 'hips.rotation.y': -0.5, 'hips.position.z': 0.3 } },
+    { at: 0, set: { 'rightArmGroup.rotation.x': -1.5, 'rightArmGroup.rotation.z': 1.0, 'rightForearmGroup.rotation.x': -2.5, 'hips.rotation.y': -0.5, 'hips.position.x': 0.25 } },
     { at: 0.35, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
   spinning_kick: { duration: 1000, phases: [
     { at: 0, set: { 'hips.rotation.y': 3.14 } },
-    { at: 0.3, set: { 'rightLegGroup.rotation.x': -2.0, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': 6.28, 'hips.position.z': 0.3 } },
+    { at: 0.3, set: { 'rightLegGroup.rotation.x': -0.2, 'rightLegGroup.rotation.z': 1.8, 'rightCalfGroup.rotation.x': 0.5, 'hips.rotation.y': 6.28, 'hips.position.x': 0.25 } },
     { at: 0.5, hit: true },
     { at: 0.75, set: 'guard' }
   ]},
+  // ── Grappling ──
   takedown: { duration: 1200, phases: [
-    { at: 0, set: { 'hips.position.y': -0.3, 'hips.position.z': 0.5, 'hips.rotation.x': 0.5 } },
+    { at: 0, set: { 'hips.position.y': -0.3, 'hips.position.x': 0.5, 'hips.rotation.x': 0.5 } },
     { at: 0.3, hit: true },
     { at: 0.4, setDefender: { 'hips.position.y': -0.5, 'hips.rotation.x': -1.2 } },
     { at: 0.5, set: { 'hips.position.y': -0.3, 'hips.rotation.x': 0.3 } },
     { at: 0.8, set: 'guard', setDefender: 'guard' }
   ]},
   clinch: { duration: 800, phases: [
-    { at: 0, set: { 'hips.position.z': 0.4, 'leftArmGroup.rotation.x': -0.5, 'leftArmGroup.rotation.z': 0.8, 'rightArmGroup.rotation.x': -0.5, 'rightArmGroup.rotation.z': -0.8 } },
+    { at: 0, set: { 'hips.position.x': 0.4, 'leftArmGroup.rotation.x': -0.5, 'leftArmGroup.rotation.z': 0.9, 'rightArmGroup.rotation.x': -0.5, 'rightArmGroup.rotation.z': 0.9 } },
     { at: 0.3, hit: true },
     { at: 0.6, set: 'guard' }
   ]},
@@ -139,7 +148,7 @@ const _MOVES = {
     { at: 0.8, set: 'guard', setDefender: 'guard' }
   ]},
   rear_naked: { duration: 2000, phases: [
-    { at: 0, set: { 'hips.position.z': 0.5, 'leftArmGroup.rotation.x': -0.5, 'leftArmGroup.rotation.z': 1.2, 'rightArmGroup.rotation.x': -0.5, 'rightArmGroup.rotation.z': -1.2 } },
+    { at: 0, set: { 'hips.position.x': 0.4, 'leftArmGroup.rotation.x': -0.5, 'leftArmGroup.rotation.z': 1.0, 'rightArmGroup.rotation.x': -0.5, 'rightArmGroup.rotation.z': 0.9 } },
     { at: 0.2, setDefender: { 'headGroup.rotation.x': 0.3 } },
     { at: 0.5, hit: true },
     { at: 0.8, set: 'guard', setDefender: 'guard' }
@@ -150,17 +159,18 @@ const _MOVES = {
     { at: 0.8, set: 'guard', setDefender: 'guard' }
   ]},
   guillotine: { duration: 1800, phases: [
-    { at: 0, set: { 'leftArmGroup.rotation.x': -0.8, 'leftArmGroup.rotation.z': 1.0, 'rightArmGroup.rotation.x': -0.8 }, setDefender: { 'hips.rotation.x': 0.5, 'headGroup.rotation.x': 0.5 } },
+    { at: 0, set: { 'leftArmGroup.rotation.x': -0.8, 'leftArmGroup.rotation.z': 1.0, 'rightArmGroup.rotation.x': -0.8, 'rightArmGroup.rotation.z': 0.5 }, setDefender: { 'hips.rotation.x': 0.5, 'headGroup.rotation.x': 0.5 } },
     { at: 0.3, set: { 'hips.position.y': -0.2 }, setDefender: { 'hips.position.y': -0.3 } },
     { at: 0.5, hit: true },
     { at: 0.8, set: 'guard', setDefender: 'guard' }
   ]},
+  // ── Defense ──
   block: { duration: 600, phases: [
-    { at: 0, set: { 'leftArmGroup.rotation.x': -1.8, 'leftForearmGroup.rotation.x': -2.0, 'rightArmGroup.rotation.x': -1.8, 'rightForearmGroup.rotation.x': -2.0, 'hips.position.y': -0.05 } },
+    { at: 0, set: { 'leftArmGroup.rotation.x': -1.8, 'leftArmGroup.rotation.z': 0.5, 'leftForearmGroup.rotation.x': -2.0, 'rightArmGroup.rotation.x': -1.8, 'rightArmGroup.rotation.z': 0.5, 'rightForearmGroup.rotation.x': -2.0, 'hips.position.y': -0.05 } },
     { at: 0.7, set: 'guard' }
   ]},
   dodge: { duration: 500, phases: [
-    { at: 0, set: { 'hips.position.x': 0.4, 'hips.position.y': -0.1, 'hips.rotation.z': 0.3 } },
+    { at: 0, set: { 'hips.position.z': 0.4, 'hips.position.y': -0.1, 'hips.rotation.z': 0.3 } },
     { at: 0.6, set: 'guard' }
   ]},
   sprawl: { duration: 700, phases: [

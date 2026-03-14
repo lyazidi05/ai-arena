@@ -237,8 +237,8 @@
     .oct-floor { position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%); width: 80%; height: 40%; }
 
     .arena-fig { position: absolute; bottom: 16%; transition: all 0.4s ease; }
-    .arena-fig.left { left: 20%; }
-    .arena-fig.right { right: 20%; transform: scaleX(-1); }
+    .arena-fig.left { left: 30%; }
+    .arena-fig.right { right: 30%; transform: scaleX(-1); }
     @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-7px);} 75%{transform:translateX(7px);} }
     @keyframes shake-r { 0%,100%{transform:scaleX(-1) translateX(0);} 25%{transform:scaleX(-1) translateX(-7px);} 75%{transform:scaleX(-1) translateX(7px);} }
     .shake-l { animation: shake 0.3s ease !important; }
@@ -893,7 +893,7 @@
       <!-- 3D Arena container -->
       <div id="arena-3d-wrap"></div>
       <!-- Toggle 3D button -->
-      <button id="btn-toggle-3d" onclick="toggle3DArena()" title="Toggle 3D view">3D</button>
+      <button id="btn-toggle-3d" onclick="toggle3DArena()" title="Toggle 3D view">2D</button>
       <div class="arena-spot-l"></div>
       <div class="arena-spot-r"></div>
       <div class="oct-floor">
@@ -1766,7 +1766,7 @@ async function loadFightsView() {
 
 // ── ARENA ──
 let arenaInterval = null;
-let arena3dActive = (localStorage.getItem('coa_3d') === '1') && typeof Arena3D !== 'undefined';
+let arena3dActive = typeof Arena3D !== 'undefined';  // 3D is the default mode
 let arenaInstance3d = null;
 let currentArenaFightId = null;
 let arenaLastMsgId = 0;
@@ -1782,13 +1782,10 @@ function setReplaySpeed(s) {
 }
 
 function toggle3DArena() {
-  if (typeof Arena3D === 'undefined') {
-    alert('Three.js failed to load. 3D mode unavailable.');
-    return;
-  }
+  // If Three.js unavailable, silently stay in 2D
+  if (!arena3dActive && typeof Arena3D === 'undefined') return;
   arena3dActive = !arena3dActive;
-  localStorage.setItem('coa_3d', arena3dActive ? '1' : '0');
-  document.getElementById('btn-toggle-3d').classList.toggle('active', arena3dActive);
+  _sync3DToggleBtn();
   const wrap = document.getElementById('arena-3d-wrap');
   const svgFigs = document.querySelectorAll('.arena-fig');
   const octFloor = document.querySelector('.oct-floor');
@@ -1819,6 +1816,8 @@ function _sync3DToggleBtn() {
   if (!btn) return;
   const available = typeof Arena3D !== 'undefined';
   btn.classList.toggle('active', arena3dActive && available);
+  // When 3D is active, button offers to switch to 2D, and vice versa
+  btn.textContent = (arena3dActive && available) ? '2D' : '3D';
   if (!available) { btn.style.opacity = '0.4'; btn.title = 'Three.js unavailable'; }
 }
 
@@ -2128,15 +2127,23 @@ function openArena(fightId) {
   }
   currentArenaFightId = fightId;
   arenaLastMsgId = 0;
+  // Default to 3D if available; fallback silently to 2D if Three.js failed
+  arena3dActive = typeof Arena3D !== 'undefined';
   showWalkout(fightId);
   _sync3DToggleBtn();
-  if (arena3dActive && typeof Arena3D !== 'undefined') {
+  if (arena3dActive) {
     setTimeout(() => {
-      _init3DInstance();
-      document.getElementById('arena-3d-wrap').style.display = 'block';
-      document.querySelectorAll('.arena-fig').forEach(el => el.style.visibility = 'hidden');
-      const oct = document.querySelector('.oct-floor');
-      if (oct) oct.style.visibility = 'hidden';
+      try {
+        _init3DInstance();
+        document.getElementById('arena-3d-wrap').style.display = 'block';
+        document.querySelectorAll('.arena-fig').forEach(el => el.style.visibility = 'hidden');
+        const oct = document.querySelector('.oct-floor');
+        if (oct) oct.style.visibility = 'hidden';
+      } catch(e) {
+        // Three.js failed silently — stay in 2D
+        arena3dActive = false;
+        _sync3DToggleBtn();
+      }
     }, 50);
   }
 }
@@ -2299,11 +2306,11 @@ function replayActions(actions, f1Id, f2Id, endMethod, onComplete) {
     const isKick = move.includes('kick') || move === 'knee' || move === 'elbow';
     const isGrapple = ['takedown','clinch','slam','armbar','rear_naked','triangle','guillotine'].includes(move);
     if (isGrapple) {
-      atk.style.transform = atkSide === 'a' ? 'translateX(40px) translateY(6px)' : 'scaleX(-1) translateX(40px) translateY(6px)';
+      atk.style.transform = atkSide === 'a' ? 'translateX(54px) translateY(6px)' : 'scaleX(-1) translateX(54px) translateY(6px)';
     } else if (isKick) {
-      atk.style.transform = atkSide === 'a' ? 'translateX(18px) rotate(6deg)' : 'scaleX(-1) translateX(18px) rotate(-6deg)';
+      atk.style.transform = atkSide === 'a' ? 'translateX(28px) rotate(8deg)' : 'scaleX(-1) translateX(28px) rotate(-8deg)';
     } else if (move !== 'block' && move !== 'dodge' && move !== 'sprawl') {
-      atk.style.transform = atkSide === 'a' ? 'translateX(28px)' : 'scaleX(-1) translateX(28px)';
+      atk.style.transform = atkSide === 'a' ? 'translateX(38px)' : 'scaleX(-1) translateX(38px)';
     }
 
     // 3D move animation (runs in parallel with 2D)
