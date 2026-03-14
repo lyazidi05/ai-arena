@@ -6,11 +6,22 @@
  */
 
 const BASE = 'https://clashofagents.org/api';
-const DELAY_MS = 600; // pause between API calls to respect rate limits
+const DELAY_MS     = 800;  // pause between non-fight calls
+const FIGHT_DELAY  = 2200; // pause between fight calls (rate limit: 30 req/min on /fight/*)
 
 // ──────────────────────────────────────────────────────────────────────────────
 // FIGHTER ROSTER
 // ──────────────────────────────────────────────────────────────────────────────
+
+// API keys from previous registration (leave null to re-register)
+const KNOWN_KEYS = {
+  IronClaude:    'arena_ccqEBzQTepd9yylD7koJm7gQoc',
+  GPT_Destroyer: 'arena_5uCPoEY4RhApYeyxSjcp2JOAi6',
+  MistralFury:   'arena_weEwacKkj6Jv1BszqxpBEtJPLb',
+  GeminiStrike:  'arena_SXgXWbxnNLQrrZCF2ofV41DnOG',
+  LlamaGrappler: 'arena_AyaxGuLpEaUTMVjIfGVY5S6Iru',
+  DeepSeekKO:    'arena_OL61Oby8xHjpX2G1R0vfSBPcIr',
+};
 
 const FIGHTERS = [
   { name: 'IronClaude',    discipline: 'boxing',     height_cm: 175, weight_kg: 74, nickname: 'The Machine',   trainStat: 'striking'  },
@@ -63,15 +74,24 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-async function api(path, { method = 'GET', body, apiKey } = {}) {
+async function api(path, { method = 'GET', body, apiKey } = {}, retries = 4) {
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['x-api-key'] = apiKey;
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${BASE}${path}`, opts);
-  const json = await res.json();
-  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}: ${JSON.stringify(json)}`);
-  return json;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const res = await fetch(`${BASE}${path}`, opts);
+    const json = await res.json();
+    if (res.status === 429) {
+      const wait = attempt * 3000;
+      log('⏳', `Rate limited on ${method} ${path} — waiting ${wait/1000}s (attempt ${attempt}/${retries})`);
+      await sleep(wait);
+      continue;
+    }
+    if (!res.ok) throw new Error(`${method} ${path} → ${res.status}: ${JSON.stringify(json)}`);
+    return json;
+  }
+  throw new Error(`${method} ${path} → still rate limited after ${retries} retries`);
 }
 
 function log(emoji, msg) {
@@ -128,7 +148,7 @@ async function runFight(fightId, fighters) {
   log('🔔', `Fight #${fightId} started — polling...`);
 
   while (true) {
-    await sleep(DELAY_MS);
+    await sleep(FIGHT_DELAY);
     const state = await api(`/fight/${fightId}`);
 
     if (state.status === 'finished') {
@@ -162,8 +182,10 @@ async function runFight(fightId, fighters) {
       });
     } catch (e) {
       log('⚠️', `Action failed for ${actor.name}: ${e.message}`);
+      await sleep(FIGHT_DELAY);
       continue;
     }
+    await sleep(FIGHT_DELAY); // extra pause after each action
 
     const dmg   = result.damage_dealt ?? 0;
     const crit  = result.is_critical ? ' 💥 CRIT!' : '';
@@ -221,19 +243,18 @@ async function main() {
       });
       roster[f.name] = {
         ...f,
-        apiKey:    res.api_key,
-        id:        null, // will be filled below
-        elo:       res.fighter?.elo ?? 1000,
+        apiKey:     res.api_key,
+        id:         null, // will be filled below
+        elo:        res.fighter?.elo ?? 1000,
         weightClass: res.fighter?.weight_class,
       };
       log('✅', `Registered ${f.name.padEnd(15)} | ${f.discipline.padEnd(10)} | ${res.fighter?.weight_class} | ELO ${res.fighter?.elo ?? 1000}`);
       log('🔑', `  API key: ${res.api_key}`);
     } catch (e) {
       if (e.message.includes('already taken')) {
-        log('⚠️', `${f.name} already exists — skipping registration`);
-        // Still need an API key — this seed assumes fresh run or the user already has keys
-        // Set a placeholder so subsequent steps don't crash silently
-        roster[f.name] = { ...f, apiKey: null };
+        const knownKey = KNOWN_KEYS[f.name] || null;
+        log('⚠️', `${f.name} already exists — using stored key ${knownKey ? '✓' : '✗ (none saved)'}`);
+        roster[f.name] = { ...f, apiKey: knownKey };
       } else {
         log('❌', `Failed to register ${f.name}: ${e.message}`);
         process.exit(1);

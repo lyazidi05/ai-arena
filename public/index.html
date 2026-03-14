@@ -405,7 +405,10 @@
     }
 
     .finish-ov { position: absolute; inset: 0; background: rgba(0,0,0,.9); display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 10; border-radius: 14px; }
-    .finish-ov.show { display: flex; }
+    .finish-ov.show { display: flex; animation: finOvIn 0.5s cubic-bezier(.22,1,.36,1) both; }
+    @keyframes finOvIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+    .fin-replay-btn { margin-top: 20px; background: none; border: 1px solid var(--muted); color: var(--muted); padding: 8px 20px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
+    .fin-replay-btn:hover { border-color: var(--gold); color: var(--gold); }
     .fin-result { font-size: 3.5rem; font-weight: 900; color: var(--red); text-shadow: 0 0 50px var(--rg); letter-spacing: 4px; }
     .fin-winner { font-size: 1.6rem; font-weight: 700; color: var(--gold); margin-top: 8px; letter-spacing: 2px; }
     .fin-method { font-size: 13px; color: var(--muted); margin-top: 6px; }
@@ -856,6 +859,7 @@
         <div class="fin-result" id="fin-res">KNOCKOUT!</div>
         <div class="fin-winner" id="fin-win"></div>
         <div class="fin-method" id="fin-met"></div>
+        <button class="fin-replay-btn" onclick="triggerReplay()">↺ Revoir le combat</button>
       </div>
     </div>
 
@@ -1696,15 +1700,20 @@ function setReplaySpeed(s) {
   document.getElementById(map[s])?.classList.add('active');
 }
 
+function showFinishOverlay() {
+  document.getElementById('finish-ov').classList.add('show');
+}
+
 function triggerReplay() {
   if (!arenaCurrentFightData) return;
-  const { actions, f1id, f2id } = arenaCurrentFightData;
-  // Reset fighters position
+  const { actions, f1id, f2id, endMethod } = arenaCurrentFightData;
+  // Hide overlay and reset fighters
+  document.getElementById('finish-ov').classList.remove('show');
   document.getElementById('af-a').classList.remove('ko-down');
   document.getElementById('af-b').classList.remove('ko-down');
   document.getElementById('af-a').style.transform = '';
   document.getElementById('af-b').style.transform = 'scaleX(-1)';
-  replayActions(actions, f1id, f2id, arenaCurrentFightData.endMethod);
+  replayActions(actions, f1id, f2id, endMethod, showFinishOverlay);
 }
 
 function triggerScreenFlash(color) {
@@ -2094,21 +2103,24 @@ async function loadArenaFight(fightId, isRefresh = false) {
   }
   arenaLastActionCount = actions.length;
 
-  // Finish overlay + show replay controls
+  // Finish overlay + replay controls
   if (data.status === 'finished' && data.winner) {
     const resMap = { ko: 'KNOCKOUT!', tko: 'TKO!', submission: 'SUBMISSION!', decision: 'DECISION' };
     document.getElementById('fin-res').textContent = resMap[endMethod] || 'FIGHT OVER';
     document.getElementById('fin-win').textContent = data.winner.toUpperCase() + ' WINS';
     document.getElementById('fin-met').textContent = (endMethod || '').toUpperCase() + ' · Round ' + data.current_round;
-    setTimeout(() => document.getElementById('finish-ov').classList.add('show'), isRefresh ? 600 : 200);
     document.getElementById('replay-controls').style.display = 'flex';
     if (arenaInterval) { clearInterval(arenaInterval); arenaInterval = null; }
+    // On refresh (fight just ended): show overlay quickly
+    if (isRefresh) setTimeout(showFinishOverlay, 600);
+    // On first load: overlay shown only after replay completes (handled below)
   }
 
-  // On first load, replay all actions
+  // On first load, replay all actions then show overlay
   if (!isRefresh && actions.length > 0) {
     arenaLastActionCount = 0;
-    replayActions(actions, f1.id, f2.id, endMethod);
+    const onDone = (data.status === 'finished' && data.winner) ? showFinishOverlay : null;
+    replayActions(actions, f1.id, f2.id, endMethod, onDone);
     arenaLastActionCount = actions.length;
   }
 }
@@ -2122,10 +2134,14 @@ function setArenaHP(side, hp) {
   fill.className = 'hp-fill-a' + (hp > 60 ? '' : hp > 30 ? ' md' : ' lo');
 }
 
-function replayActions(actions, f1Id, f2Id, endMethod) {
+function replayActions(actions, f1Id, f2Id, endMethod, onComplete) {
   let i = 0;
   function next() {
-    if (i >= actions.length) return;
+    if (i >= actions.length) {
+      // Decision finish or end of partial replay — fire callback if present
+      if (onComplete) setTimeout(onComplete, 1000);
+      return;
+    }
     const a = actions[i++];
     const isLast = i === actions.length;
     const isF1 = a.fighter_id === f1Id;
@@ -2208,7 +2224,10 @@ function replayActions(actions, f1Id, f2Id, endMethod) {
           const koDelay = Math.round(500 / replaySpeed);
           setTimeout(() => {
             triggerKnockdown(defSide);
-            setTimeout(() => showKOText('KNOCKOUT!', false), 400);
+            setTimeout(() => {
+              showKOText('KNOCKOUT!', false);
+              if (onComplete) setTimeout(onComplete, 1000);
+            }, 400);
           }, koDelay);
           return; // don't call next — fight is over
         }
@@ -2220,7 +2239,10 @@ function replayActions(actions, f1Id, f2Id, endMethod) {
             // Pull both fighters together
             atk.style.transform = atkSide === 'a' ? 'translateX(30px) translateY(8px)' : 'scaleX(-1) translateX(30px) translateY(8px)';
             def.style.transform = defSide === 'a' ? 'translateX(-30px) translateY(8px)' : 'scaleX(-1) translateX(-30px) translateY(8px)';
-            setTimeout(() => showKOText('SUBMISSION!', true), 400);
+            setTimeout(() => {
+              showKOText('SUBMISSION!', true);
+              if (onComplete) setTimeout(onComplete, 1000);
+            }, 400);
           }, subDelay);
           return;
         }
